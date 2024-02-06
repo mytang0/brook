@@ -1,0 +1,90 @@
+{
+  "name": "test-switch",
+  "description": "for showtime",
+  "taskDefs": [
+    {
+      "type": "SWITCH",
+      "name": "test-switch",
+      "input": {
+        "case": "${flow.input.envCode}",
+        "decisionCases": {
+          "dev": [
+            {
+              "type": "COMPUTING",
+              "name": "devLogic",
+              "input": {
+                "source": "dev"
+              }
+            }
+          ],
+          "test": [
+            {
+              "type": "COMPUTING",
+              "name": "testLogic",
+              "input": {
+                "source": "test"
+              }
+            }
+          ],
+          "stag": [
+            {
+              "type": "COMPUTING",
+              "name": "stagLogic",
+              "input": {
+                "source": "stag"
+              }
+            }
+          ],
+          "prod": [
+            {
+              "type": "COMPUTING",
+              "name": "prodLogic",
+              "input": {
+                "source": "prod"
+              }
+            }
+          ],
+          "other": [
+            {
+              "type": "IF",
+              "name": "test-if",
+              "input": {
+                "engineType": "javascript",
+                "branches": [
+                  {
+                    "condition": "$.flow.input.envCode=='grey'",
+                    "cases": [
+                      {
+                        "type": "COMPUTING",
+                        "name": "helloLogic",
+                        "input": {
+                          "source": "Hello, ${flow.input.envCode}!"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "condition": "$.flow.input.envCode!='grey'",
+                    "cases": [
+                      {
+                        "type": "COMPUTING",
+                        "name": "rejectLogic",
+                        "input": {
+                          "source": "Reject!"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "defaultCaseKey": "other"
+      }
+    }
+  ],
+  "controlDef": {
+    "localExecution": true
+  }
+}

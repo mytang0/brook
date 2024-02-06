@@ -1,0 +1,25 @@
+{
+  "hints": [],
+  "groups": [
+  ],
+  "properties": [
+    {
+      "sourceType": "java.lang.Boolean",
+      "name": "brook.metadata.mysql.enabled",
+      "description": "Whether to enable mysql metadata implementation, the default is 'false'.",
+      "type": "java.lang.Boolean"
+    },
+    {
+      "sourceType": "java.lang.Boolean",
+      "name": "brook.queue.mysql.enabled",
+      "description": "Whether to enable mysql queue implementation, the default is 'false'.",
+      "type": "java.lang.Boolean"
+    },
+    {
+      "sourceType": "java.lang.Boolean",
+      "name": "brook.execution-dao.mysql.enabled",
+      "description": "Whether to enable mysql execution-dao implementation, the default is 'false'.",
+      "type": "java.lang.Boolean"
+    }
+  ]
+}

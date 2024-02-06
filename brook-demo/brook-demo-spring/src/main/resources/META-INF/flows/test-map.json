@@ -1,0 +1,11 @@
+{
+  "name": "test-map",
+  "description": "for unit testing",
+  "taskDefs": [
+    {
+      "type": "test-map",
+      "name": "test-case-map",
+      "input": "${flow.input}"
+    }
+  ]
+}

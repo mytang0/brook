@@ -1,0 +1,2 @@
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+  org.mytang.brook.spring.boot.autoconfigure.FlowAutoConfiguration

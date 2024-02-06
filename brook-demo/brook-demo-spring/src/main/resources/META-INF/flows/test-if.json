@@ -1,0 +1,39 @@
+{
+  "name": "test-if",
+  "description": "for showtime",
+  "taskDefs": [
+    {
+      "type": "IF",
+      "name": "test-if",
+      "input": {
+        "engineType": "javascript",
+        "branches": [
+          {
+            "condition": "$.flow.input.envCode=='dev'",
+            "cases": [
+              {
+                "type": "COMPUTING",
+                "name": "devLogic",
+                "input": {
+                  "source": "dev"
+                }
+              }
+            ]
+          },
+          {
+            "condition": "$.flow.input.envCode=='test'",
+            "cases": [
+              {
+                "type": "COMPUTING",
+                "name": "testLogic",
+                "input": {
+                  "source": "test"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

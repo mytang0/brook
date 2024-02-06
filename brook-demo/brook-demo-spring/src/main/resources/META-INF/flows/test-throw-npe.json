@@ -1,0 +1,10 @@
+{
+  "name": "test-throw-npe",
+  "description": "for unit testing",
+  "taskDefs": [
+    {
+      "type": "test-throw-npe",
+      "name": "test-case-throw-npe"
+    }
+  ]
+}

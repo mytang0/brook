@@ -1,0 +1,49 @@
+{
+  "hints": [],
+  "groups": [
+    {
+      "sourceType": "org.mytang.brook.spring.boot.autoconfigure.FlowAutoConfiguration",
+      "name": "brook.lock",
+      "sourceMethod": "flowLockProperties()",
+      "type": "org.mytang.brook.core.lock.FlowLockFacade$LockProperties"
+    },
+    {
+      "sourceType": "org.mytang.brook.spring.boot.autoconfigure.FlowAutoConfiguration",
+      "name": "brook.log",
+      "sourceMethod": "flowLogProperties()",
+      "type": "org.mytang.brook.core.service.FlowLogService$FlowLogProperties"
+    }
+  ],
+  "properties": [
+    {
+      "sourceType": "org.mytang.brook.core.lock.FlowLockFacade$LockProperties",
+      "name": "brook.lock.enabled",
+      "description": "Whether to enable flow-lock, the default is 'false'.",
+      "type": "java.lang.Boolean"
+    },
+    {
+      "sourceType": "org.mytang.brook.core.lock.FlowLockFacade$LockProperties",
+      "name": "brook.lock.lock-lease-time",
+      "description": "The maximum lock occupancy time. When the time is reached, the lock will be automatically released. The default is 60000 millis.",
+      "type": "java.time.Duration"
+    },
+    {
+      "sourceType": "org.mytang.brook.core.lock.FlowLockFacade$LockProperties",
+      "name": "brook.lock.lock-time-to-try",
+      "description": "Maximum lock acquisition time. After the time is reached, the wait ends even if the lock is not acquired. The default value is 500 milliseconds.",
+      "type": "java.time.Duration"
+    },
+    {
+      "sourceType": "org.mytang.brook.core.service.FlowLogService$FlowLogProperties",
+      "name": "brook.log.root",
+      "description": "After the flow turns on log output, the storage path of the log. The default is '$USER_DIR/logs'.",
+      "type": "java.lang.String"
+    },
+    {
+      "sourceType": "org.mytang.brook.core.service.FlowLogService$FlowLogProperties",
+      "name": "brook.log.suffix",
+      "description": "The log file suffix, default value is '.log'.",
+      "type": "java.lang.String"
+    }
+  ]
+}

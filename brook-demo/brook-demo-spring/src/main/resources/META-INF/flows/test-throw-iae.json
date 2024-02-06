@@ -1,0 +1,10 @@
+{
+  "name": "test-throw-iae",
+  "description": "for unit testing",
+  "taskDefs": [
+    {
+      "type": "test-throw-iae",
+      "name": "test-case-throw-iae"
+    }
+  ]
+}

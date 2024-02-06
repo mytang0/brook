@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.mytang.brook.spring.boot.mybatis.mapper.TaskMapper">
+    <insert id="insert" parameterType="org.mytang.brook.spring.boot.mybatis.entity.Task">
+        INSERT IGNORE INTO ${executionDaoTaskTableName}(`task_id`,`task_name`,`flow_id`,`json_def`,`json_data`) VALUES (#{taskId},#{taskName},#{flowId},#{jsonDef},#{jsonData})
+    </insert>
+
+    <select id="selectByTaskId" parameterType="java.lang.String" resultType="org.mytang.brook.spring.boot.mybatis.entity.Task">
+        SELECT `id`,`task_id`,`task_name`,`flow_id`,`json_def`,`json_data`,`r_add_time`,`r_modified_time` FROM ${executionDaoTaskTableName} WHERE `task_id`=#{taskId}
+    </select>
+
+    <select id="selectByFlowId" parameterType="java.lang.String" resultType="org.mytang.brook.spring.boot.mybatis.entity.Task">
+        SELECT `id`,`task_id`,`task_name`,`flow_id`,`json_def`,`json_data`,`r_add_time`,`r_modified_time` FROM ${executionDaoTaskTableName} WHERE `flow_id`=#{flowId} ORDER BY `id`
+    </select>
+
+    <select id="selectByTaskName" parameterType="java.util.Map" resultType="org.mytang.brook.spring.boot.mybatis.entity.Task">
+        SELECT `id`,`task_id`,`task_name`,`flow_id`,`json_def`,`json_data`,`r_add_time`,`r_modified_time` FROM ${executionDaoTaskTableName} WHERE `flow_id`=#{flowId} and `task_name`=#{taskName}
+    </select>
+
+    <update id="updateByTaskId" parameterType="org.mytang.brook.spring.boot.mybatis.entity.Task">
+        UPDATE ${executionDaoTaskTableName} SET `json_data`= #{jsonData} WHERE `task_id`=#{taskId}
+    </update>
+
+    <delete id="deleteByTaskId" parameterType="java.lang.String">
+        DELETE FROM ${executionDaoTaskTableName} WHERE `task_id`=#{taskId}
+    </delete>
+
+    <delete id="deleteByFlowId" parameterType="java.lang.String">
+        DELETE FROM ${executionDaoTaskTableName} WHERE `flow_id`=#{flowId}
+    </delete>
+</mapper>

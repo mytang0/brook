@@ -1,0 +1,81 @@
+{
+  "hints": [],
+  "groups": [
+    {
+      "sourceType": "org.redisson.config.ClusterServersConfig",
+      "name": "brook.lock.redis.config.cluster-servers-config",
+      "type": "org.redisson.config.ClusterServersConfig"
+    },
+    {
+      "sourceType": "org.redisson.config.SentinelServersConfig",
+      "name": "brook.lock.redis.config.sentinel-servers-config",
+      "type": "org.redisson.config.SentinelServersConfig"
+    },
+    {
+      "sourceType": "org.redisson.config.MasterSlaveServersConfig",
+      "name": "brook.lock.redis.config.master-slave-servers-config",
+      "type": "org.redisson.config.MasterSlaveServersConfig"
+    },
+    {
+      "sourceType": "org.redisson.config.SingleServerConfig",
+      "name": "brook.lock.redis.config.single-server-config",
+      "type": "org.redisson.config.SingleServerConfig"
+    }
+  ],
+  "properties": [
+    {
+      "sourceType": "org.redisson.config.ClusterServersConfig",
+      "name": "brook.lock.redis.config.cluster-servers-config.node-addresses",
+      "description": "Redis cluster node urls list.",
+      "type": "java.util.List<java.lang.String>"
+    },
+    {
+      "sourceType": "org.redisson.config.ClusterServersConfig",
+      "name": "brook.lock.redis.config.cluster-servers-config.password",
+      "description": "Password for Redis authentication. Should be null if not needed.",
+      "type": "java.lang.String"
+    },
+    {
+      "sourceType": "org.redisson.config.SentinelServersConfig",
+      "name": "brook.lock.redis.config.sentinel-servers-config.sentinel-addresses",
+      "description": "Redis sentinel node urls list.",
+      "type": "java.util.List<java.lang.String>"
+    },
+    {
+      "sourceType": "org.redisson.config.SentinelServersConfig",
+      "name": "brook.lock.redis.config.sentinel-servers-config.master-name",
+      "description": "The master name. Should be null if not needed.",
+      "type": "java.lang.String"
+    },
+    {
+      "sourceType": "org.redisson.config.SentinelServersConfig",
+      "name": "brook.lock.redis.config.sentinel-servers-config.sentinel-username",
+      "description": "The sentinel username.",
+      "type": "java.lang.String"
+    },
+    {
+      "sourceType": "org.redisson.config.SentinelServersConfig",
+      "name": "brook.lock.redis.config.sentinel-servers-config.sentinel-password",
+      "description": "The sentinel password.",
+      "type": "java.lang.String"
+    },
+    {
+      "sourceType": "org.redisson.config.SentinelServersConfig",
+      "name": "brook.lock.redis.config.sentinel-servers-config.password",
+      "description": "Password for Redis authentication. Should be null if not needed.",
+      "type": "java.lang.String"
+    },
+    {
+      "sourceType": "org.redisson.config.SingleServerConfig",
+      "name": "brook.lock.redis.config.single-server-config.address",
+      "description": "Redis server address.",
+      "type": "java.lang.String"
+    },
+    {
+      "sourceType": "org.redisson.config.SingleServerConfig",
+      "name": "brook.lock.redis.config.single-server-config.password",
+      "description": "Password for Redis authentication. Should be null if not needed.",
+      "type": "java.lang.String"
+    }
+  ]
+}

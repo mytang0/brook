@@ -1,0 +1,10 @@
+{
+  "name": "test-void",
+  "description": "for unit testing",
+  "taskDefs": [
+    {
+      "type": "test-void",
+      "name": "test-case-void"
+    }
+  ]
+}

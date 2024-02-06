@@ -1,0 +1,1 @@
+spring=org.mytang.brook.spring.boot.extension.SpringExtensionInjector

@@ -1,0 +1,37 @@
+{
+  "name": "test-hang-fail",
+  "description": "for showtime",
+  "taskDefs": [
+    {
+      "type": "HTTP",
+      "name": "http-async",
+      "input": {
+        "uri": "http://127.0.0.1:8080/hang/test/async",
+        "method": "POST"
+      },
+      "hangDef": {
+        "determineTaskDef": {
+          "type": "HTTP",
+          "name": "hang-fail",
+          "input": {
+            "uri": "http://127.0.0.1:8080/hang/test/fail",
+            "method": "GET",
+            "params": {
+              "id": "${output.body}"
+            }
+          },
+          "checkDef": {
+            "retryDef": {
+              "retryCondition": "$.body == 'fail'"
+            }
+          },
+          "controlDef": {
+            "retryCount": 3,
+            "retryDelayMs": 5000
+          }
+        }
+      }
+    }
+  ],
+  "output": "${test-http.output}"
+}

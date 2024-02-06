@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.mytang.brook.spring.boot.mybatis.mapper.TaskPendingMapper">
+    <insert id="insert" parameterType="org.mytang.brook.spring.boot.mybatis.entity.TaskPending">
+        INSERT IGNORE INTO ${executionDaoTaskPendingTableName}(`task_id`,`task_name`,`flow_id`) VALUES (#{taskId},#{taskName},#{flowId})
+    </insert>
+
+    <delete id="deleteByTaskId" parameterType="java.lang.String">
+        DELETE FROM ${executionDaoTaskPendingTableName} WHERE `task_id`=#{taskId}
+    </delete>
+
+    <delete id="deleteByFlowId" parameterType="java.lang.String">
+        DELETE FROM ${executionDaoTaskPendingTableName} WHERE `flow_id`=#{flowId}
+    </delete>
+
+    <select id="selectTaskIds" parameterType="java.lang.String" resultType="java.lang.String">
+        SELECT `task_id` FROM ${executionDaoTaskPendingTableName} WHERE `task_name`=#{taskName}
+    </select>
+</mapper>

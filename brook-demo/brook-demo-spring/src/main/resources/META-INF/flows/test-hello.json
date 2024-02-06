@@ -1,0 +1,11 @@
+{
+  "name": "test-hello",
+  "description": "for unit testing",
+  "taskDefs": [
+    {
+      "type": "test-hello",
+      "name": "test-case-hello",
+      "input": "${flow.input}"
+    }
+  ]
+}

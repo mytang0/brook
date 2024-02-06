@@ -1,0 +1,52 @@
+{
+  "name": "test-simple",
+  "description": "for unit testing",
+  "taskDefs": [
+    {
+      "type": "COMPUTING",
+      "name": "com1",
+      "input": {
+        "source": "com1"
+      }
+    },
+    {
+      "type": "COMPUTING",
+      "name": "com2",
+      "input": {
+        "source": "com2"
+      }
+    },
+    {
+      "type": "COMPUTING",
+      "name": "com3",
+      "input": {
+        "source": "com3"
+      }
+    },
+    {
+      "type": "COMPUTING",
+      "name": "com4",
+      "input": {
+        "source": "com4"
+      }
+    },
+    {
+      "type": "COMPUTING",
+      "name": "com5",
+      "input": {
+        "source": "com5"
+      }
+    },
+    {
+      "type": "COMPUTING",
+      "name": "com6",
+      "input": {
+        "engineType": "javascript",
+        "params": {
+          "result": "com6 params"
+        },
+        "source": "$.result"
+      }
+    }
+  ]
+}

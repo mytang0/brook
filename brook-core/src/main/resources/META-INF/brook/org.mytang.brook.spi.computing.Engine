@@ -1,0 +1,2 @@
+noop=org.mytang.brook.core.computing.NoopEngine
+javascript=org.mytang.brook.core.computing.JavascriptEngine

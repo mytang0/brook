@@ -1,0 +1,18 @@
+{
+  "name": "test-http",
+  "description": "for showtime",
+  "taskDefs": [
+    {
+      "type": "HTTP",
+      "name": "test-http",
+      "input": {
+        "uri": "http://127.0.0.1:8080/flow/metadata",
+        "method": "GET",
+        "params": {
+          "flowName": "${flow.input.flowName}"
+        }
+      }
+    }
+  ],
+  "output": "${test-http.output}"
+}

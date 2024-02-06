@@ -1,0 +1,16 @@
+{
+  "name": "test-timeout",
+  "description": "for unit testing",
+  "taskDefs": [
+    {
+      "type": "test-timeout",
+      "name": "test-timeout",
+      "input": "${flow.input}"
+    }
+  ],
+  "controlDef": {
+    "timeoutMs": 3000,
+    "timeoutPolicy": "TIME_OUT",
+    "localExecution": true
+  }
+}

@@ -1,0 +1,4 @@
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+  org.mytang.brook.spring.boot.mybatis.autoconfigure.MysqlAutoConfiguration
+org.springframework.context.ApplicationContextInitializer=\
+  org.mytang.brook.spring.boot.mybatis.autoconfigure.MysqlApplicationContextInitializer

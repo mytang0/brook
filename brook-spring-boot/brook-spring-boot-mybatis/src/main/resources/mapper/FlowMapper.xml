@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.mytang.brook.spring.boot.mybatis.mapper.FlowMapper">
+    <insert id="insert" parameterType="org.mytang.brook.spring.boot.mybatis.entity.Flow">
+        INSERT IGNORE INTO ${executionDaoFlowTableName}(`flow_id`,`flow_name`,`flow_version`,`correlation_id`,`json_data`) VALUES (#{flowId},#{flowName},#{flowVersion},#{correlationId},#{jsonData})
+    </insert>
+
+    <select id="selectByFlowId" parameterType="java.lang.String" resultType="org.mytang.brook.spring.boot.mybatis.entity.Flow">
+        SELECT `id`,`flow_id`,`flow_name`,`flow_version`,`correlation_id`,`json_data`,`r_add_time`,`r_modified_time` FROM ${executionDaoFlowTableName} WHERE `flow_id`=#{flowId}
+    </select>
+
+    <select id="selectByCorrelationId" parameterType="java.lang.String" resultType="org.mytang.brook.spring.boot.mybatis.entity.Flow">
+        SELECT `id`,`flow_id`,`flow_name`,`flow_version`,`correlation_id`,`json_data`,`r_add_time`,`r_modified_time` FROM ${executionDaoFlowTableName} WHERE `correlation_id`=#{correlationId}
+    </select>
+
+    <update id="updateByFlowId" parameterType="org.mytang.brook.spring.boot.mybatis.entity.Flow">
+        UPDATE ${executionDaoFlowTableName} SET `json_data`= #{jsonData} WHERE `flow_id`=#{flowId}
+    </update>
+
+    <delete id="deleteByFlowId" parameterType="java.lang.String">
+        DELETE FROM ${executionDaoFlowTableName} WHERE `flow_id`=#{flowId}
+    </delete>
+</mapper>
