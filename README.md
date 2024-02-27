@@ -17,7 +17,7 @@ In order to maximize the lightweight nature of the Brook engine, a deliberate se
 
 <dependencies>
     <dependency>
-        <groupId>org.mytang.brook</groupId>
+        <groupId>xyz.mytang0.brook</groupId>
         <artifactId>>brook-engine</artifactId>
         <version>${brook.version}</version>
     </dependency>
@@ -33,7 +33,7 @@ In order to maximize the lightweight nature of the Brook engine, a deliberate se
 
 <dependencies>
     <dependency>
-        <groupId>org.mytang.brook</groupId>
+        <groupId>xyz.mytang0.brook</groupId>
         <artifactId>>brook-spring-boot-starter</artifactId>
         <version>${brook.version}</version>
     </dependency>
@@ -46,7 +46,7 @@ For expedited testing.
 
 ```shell
 mvn archetype:generate                                  \
-  -DarchetypeGroupId=org.mytang.brook.demo              \
+  -DarchetypeGroupId=xyz.mytang0.brook.demo             \
   -DarchetypeArtifactId=brook-demo-spring-archetype     \
   -DarchetypeVersion=1.0.0-SNAPSHOT                     \
   -DgroupId=<my.groupid>                                \

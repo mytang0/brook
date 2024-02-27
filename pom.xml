@@ -9,7 +9,7 @@
         <version>23</version>
     </parent>
 
-    <groupId>org.mytang.brook</groupId>
+    <groupId>xyz.mytang0.brook</groupId>
     <artifactId>brook-parent</artifactId>
     <version>${revision}</version>
     <packaging>pom</packaging>

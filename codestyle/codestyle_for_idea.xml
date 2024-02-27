@@ -3,7 +3,7 @@
     <option name="NAMES_COUNT_TO_USE_IMPORT_ON_DEMAND" value="99"/>
     <option name="IMPORT_LAYOUT_TABLE">
         <value>
-            <package name="org.mytang.brook" withSubpackages="true" static="false"/>
+            <package name="xyz.mytang0.brook" withSubpackages="true" static="false"/>
             <emptyLine/>
             <package name="" withSubpackages="true" static="false"/>
             <emptyLine/>
