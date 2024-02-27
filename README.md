@@ -1,2 +1,53 @@
 # Brook
-Brook is an orchestration engine, supports microservices and in-app logic (embedded use) orchestration.
+Brook is an orchestration engine, supports microservices and in-app logic (embedded use) orchestration. With the embedded mode, users can effortlessly build their own workflow orchestration engine.
+
+## Getting started
+In order to maximize the lightweight nature of the Brook engine, a deliberate separation is made between its core components (which depend solely on a few essential toolkits) and the middleware extensions using SPI (Service Provider Interface). Consequently, regardless of the application implementation framework, one can seamlessly rely on the engine JAR and initialize the relevant instances.
+
+### Maven dependency
+
+#### Not using Spring
+```xml
+<properties>
+    <dubbo.version>...</dubbo.version>
+</properties>
+
+<dependencies>
+    <dependency>
+        <groupId>org.mytang.brook</groupId>
+        <artifactId>>brook-engine</artifactId>
+        <version>${brook.version}</version>
+    </dependency>
+</dependencies>
+```
+
+#### Springboot (recommend)
+```xml
+<properties>
+    <dubbo.version>...</dubbo.version>
+</properties>
+
+<dependencies>
+    <dependency>
+        <groupId>org.mytang.brook</groupId>
+        <artifactId>>brook-spring-boot-starter</artifactId>
+        <version>${brook.version}</version>
+    </dependency>
+</dependencies>
+```
+
+### Maven archetype
+For expedited testing.
+
+```shell
+mvn archetype:generate                                  \
+  -DarchetypeGroupId=org.mytang.brook.demo              \
+  -DarchetypeArtifactId=brook-demo-spring-archetype     \
+  -DarchetypeVersion=1.0.0-SNAPSHOT                     \
+  -DgroupId=<my.groupid>                                \
+  -DartifactId=<my-artifactId>                          \
+  -DinteractiveMode=false                               \
+  -DarchetypeCatalog=internal
+```
+
+The definition of the testing process is located at 'resources/META-INF/flows'.
