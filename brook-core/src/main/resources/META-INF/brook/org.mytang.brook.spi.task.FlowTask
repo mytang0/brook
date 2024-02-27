@@ -1,5 +1,0 @@
-IF=org.mytang.brook.core.tasks.IFTask
-SWITCH=org.mytang.brook.core.tasks.SwitchTask
-SUB_FLOW=org.mytang.brook.core.tasks.SubFlowTask
-COMPUTING=org.mytang.brook.core.tasks.ComputingTask
-WAIT=org.mytang.brook.core.tasks.WaitTask
