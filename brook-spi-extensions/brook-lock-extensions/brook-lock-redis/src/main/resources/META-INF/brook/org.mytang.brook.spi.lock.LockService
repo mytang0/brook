@@ -1,1 +1,0 @@
-#redis=org.mytang.brook.lock.redis.RedisLockService

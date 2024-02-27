@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="org.mytang.brook.spring.boot.mybatis.mapper.TaskPendingMapper">
-    <insert id="insert" parameterType="org.mytang.brook.spring.boot.mybatis.entity.TaskPending">
+<mapper namespace="xyz.mytang0.brook.spring.boot.mybatis.mapper.TaskPendingMapper">
+    <insert id="insert" parameterType="xyz.mytang0.brook.spring.boot.mybatis.entity.TaskPending">
         INSERT IGNORE INTO ${executionDaoTaskPendingTableName}(`task_id`,`task_name`,`flow_id`) VALUES (#{taskId},#{taskName},#{flowId})
     </insert>
 

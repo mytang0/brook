@@ -1,0 +1,3 @@
+xyz.mytang0.brook.common.extension.loading.DirectoryLoadingStrategy
+xyz.mytang0.brook.common.extension.loading.ServiceLoadingStrategy
+xyz.mytang0.brook.common.extension.loading.ExtensionLoadingStrategy

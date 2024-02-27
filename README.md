@@ -8,16 +8,19 @@ In order to maximize the lightweight nature of the Brook engine, a deliberate se
 
 ### Maven dependency
 
-#### Not using Spring
-
+Specify the version appropriate for the project.
 ```xml
 <properties>
     <dubbo.version>...</dubbo.version>
 </properties>
+```
 
+#### Not using Spring
+
+```xml
 <dependencies>
     <dependency>
-        <groupId>org.mytang.brook</groupId>
+        <groupId>xyz.mytang0.brook</groupId>
         <artifactId>>brook-engine</artifactId>
         <version>${brook.version}</version>
     </dependency>
@@ -27,13 +30,9 @@ In order to maximize the lightweight nature of the Brook engine, a deliberate se
 #### Springboot (recommend)
 
 ```xml
-<properties>
-    <dubbo.version>...</dubbo.version>
-</properties>
-
 <dependencies>
     <dependency>
-        <groupId>org.mytang.brook</groupId>
+        <groupId>xyz.mytang0.brook</groupId>
         <artifactId>>brook-spring-boot-starter</artifactId>
         <version>${brook.version}</version>
     </dependency>
@@ -46,7 +45,7 @@ For expedited testing.
 
 ```shell
 mvn archetype:generate                                  \
-  -DarchetypeGroupId=org.mytang.brook.demo              \
+  -DarchetypeGroupId=xyz.mytang0.brook.demo             \
   -DarchetypeArtifactId=brook-demo-spring-archetype     \
   -DarchetypeVersion=1.0.0-SNAPSHOT                     \
   -DgroupId=<my.groupid>                                \

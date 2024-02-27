@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="org.mytang.brook.spring.boot.mybatis.mapper.FlowPendingMapper">
-    <insert id="insert" parameterType="org.mytang.brook.spring.boot.mybatis.entity.FlowPending">
+<mapper namespace="xyz.mytang0.brook.spring.boot.mybatis.mapper.FlowPendingMapper">
+    <insert id="insert" parameterType="xyz.mytang0.brook.spring.boot.mybatis.entity.FlowPending">
         INSERT IGNORE INTO ${executionDaoFlowPendingTableName}(`flow_id`,`flow_name`) VALUES (#{flowId},#{flowName})
     </insert>
 

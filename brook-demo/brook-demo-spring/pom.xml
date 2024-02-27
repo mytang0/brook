@@ -4,13 +4,13 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
-        <groupId>org.mytang.brook</groupId>
+        <groupId>xyz.mytang0.brook</groupId>
         <artifactId>brook-demo</artifactId>
         <version>${revision}</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <groupId>org.mytang.brook.demo</groupId>
+    <groupId>xyz.mytang0.brook.demo</groupId>
     <artifactId>brook-demo-spring</artifactId>
     <version>${revision}</version>
 
@@ -50,14 +50,14 @@
         </dependency>
 
         <dependency>
-            <groupId>org.mytang.brook</groupId>
+            <groupId>xyz.mytang0.brook</groupId>
             <artifactId>brook-spring-boot-starter</artifactId>
             <version>${brook.version}</version>
         </dependency>
 
         <!--Extensions-->
         <dependency>
-            <groupId>org.mytang.brook</groupId>
+            <groupId>xyz.mytang0.brook</groupId>
             <artifactId>brook-task-http</artifactId>
             <version>${brook.version}</version>
         </dependency>
