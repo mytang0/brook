@@ -8,13 +8,16 @@ In order to maximize the lightweight nature of the Brook engine, a deliberate se
 
 ### Maven dependency
 
-#### Not using Spring
-
+Specify the version appropriate for the project.
 ```xml
 <properties>
     <dubbo.version>...</dubbo.version>
 </properties>
+```
 
+#### Not using Spring
+
+```xml
 <dependencies>
     <dependency>
         <groupId>xyz.mytang0.brook</groupId>
@@ -27,10 +30,6 @@ In order to maximize the lightweight nature of the Brook engine, a deliberate se
 #### Springboot (recommend)
 
 ```xml
-<properties>
-    <dubbo.version>...</dubbo.version>
-</properties>
-
 <dependencies>
     <dependency>
         <groupId>xyz.mytang0.brook</groupId>
