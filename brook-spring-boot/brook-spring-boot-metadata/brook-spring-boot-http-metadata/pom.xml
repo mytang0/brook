@@ -7,12 +7,12 @@
         <groupId>xyz.mytang0.brook</groupId>
         <artifactId>brook-spring-boot-metadata</artifactId>
         <version>${revision}</version>
-        <relativePath>../pom.xml</relativePath>
     </parent>
 
     <artifactId>brook-spring-boot-http-metadata</artifactId>
     <packaging>jar</packaging>
     <name>${project.artifactId}</name>
+    <description>The spring boot http metadata module of brook project.</description>
 
     <properties>
         <brook-metadata-http.version>${project.version}</brook-metadata-http.version>

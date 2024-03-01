@@ -47,7 +47,7 @@ For expedited testing.
 mvn archetype:generate                                  \
   -DarchetypeGroupId=xyz.mytang0.brook.demo             \
   -DarchetypeArtifactId=brook-demo-spring-archetype     \
-  -DarchetypeVersion=1.0.0-SNAPSHOT                     \
+  -DarchetypeVersion=1.0.0-alpha                        \
   -DgroupId=<my.groupid>                                \
   -DartifactId=<my-artifactId>                          \
   -DinteractiveMode=false                               \

@@ -7,12 +7,12 @@
         <groupId>xyz.mytang0.brook</groupId>
         <artifactId>brook-spring-boot-locks</artifactId>
         <version>${revision}</version>
-        <relativePath>../pom.xml</relativePath>
     </parent>
 
     <artifactId>brook-spring-boot-lock-redis</artifactId>
     <packaging>jar</packaging>
     <name>${project.artifactId}</name>
+    <description>The spring boot redis lock module of brook project.</description>
 
     <properties>
         <brook-common.version>${project.version}</brook-common.version>

@@ -25,7 +25,7 @@
     </modules>
 
     <name>${project.artifactId}</name>
-    <description>The parent project of brook</description>
+    <description>The parent project of brook.</description>
     <url>https://github.com/mytang0/brook</url>
 
     <scm>
@@ -50,14 +50,21 @@
         </developer>
     </developers>
 
+    <mailingLists>
+        <mailingList>
+        </mailingList>
+    </mailingLists>
+
     <issueManagement>
         <system>GitLab Issues</system>
-        <url>https://github.com/mytang0/brook/-/issues</url>
+        <url>https://github.com/mytang0/brook/issues</url>
     </issueManagement>
 
     <properties>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <compiler.version>1.8</compiler.version>
+        <revision>1.0.0-alpha</revision>
+        <java.source.version>1.8</java.source.version>
+        <java.target.version>1.8</java.target.version>
+        <file.encoding>UTF-8</file.encoding>
         <checkstyle.version>6.18</checkstyle.version>
         <junit.version>4.13.1</junit.version>
         <jmh.version>1.33</jmh.version>
@@ -96,17 +103,18 @@
         <maven-enforcer-plugin.version>3.0.0-M2</maven-enforcer-plugin.version>
         <maven-compiler-plugin.version>3.10.1</maven-compiler-plugin.version>
         <maven-resource-plugin.version>3.1.0</maven-resource-plugin.version>
-        <maven-source-plugin.version>3.0.1</maven-source-plugin.version>
-        <coveralls-maven-plugin.version>4.3.0</coveralls-maven-plugin.version>
+        <maven-source-plugin.version>3.3.0</maven-source-plugin.version>
         <maven-checkstyle-plugin.version>3.2.1</maven-checkstyle-plugin.version>
-        <maven-javadoc-plugin.version>3.0.1</maven-javadoc-plugin.version>
+        <maven-javadoc-plugin.version>3.6.3</maven-javadoc-plugin.version>
+        <maven-release-plugin.version>3.0.1</maven-release-plugin.version>
         <maven-gpg-plugin.version>1.6</maven-gpg-plugin.version>
+        <maven-flatten-plugin.version>1.5.0</maven-flatten-plugin.version>
+        <!--Author customized version based on 0.3.1, supports JDK1.8-->
+        <publishing-maven-plugin.version>0.3.8</publishing-maven-plugin.version>
 
         <!-- Plugin configuration -->
         <checkstyle.fails.on.error>true</checkstyle.fails.on.error>
         <skip.maven.deploy>false</skip.maven.deploy>
-
-        <revision>1.0.0-SNAPSHOT</revision>
     </properties>
 
     <profiles>
@@ -118,25 +126,14 @@
             <build>
                 <plugins>
                     <plugin>
-                        <groupId>org.codehaus.mojo</groupId>
-                        <artifactId>exec-maven-plugin</artifactId>
-                        <version>${exec-maven-plugin.version}</version>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <version>${maven-source-plugin.version}</version>
                         <executions>
                             <execution>
-                                <id>git submodule update</id>
-                                <phase>initialize</phase>
-                                <inherited>false</inherited>
-                                <configuration>
-                                    <executable>git</executable>
-                                    <arguments>
-                                        <argument>submodule</argument>
-                                        <argument>update</argument>
-                                        <argument>--init</argument>
-                                        <argument>--recursive</argument>
-                                    </arguments>
-                                </configuration>
+                                <id>attach-sources</id>
                                 <goals>
-                                    <goal>exec</goal>
+                                    <goal>jar</goal>
                                 </goals>
                             </execution>
                         </executions>
@@ -147,13 +144,29 @@
                         <artifactId>maven-javadoc-plugin</artifactId>
                         <version>${maven-javadoc-plugin.version}</version>
                         <configuration>
-                            <quiet>true</quiet>
-                            <failOnError>false</failOnError>
-                            <doclint>all,-missing</doclint>
+                            <show>public</show>
+                            <charset>${file.encoding}</charset>
+                            <encoding>${file.encoding}</encoding>
+                            <docencoding>${file.encoding}</docencoding>
+                            <source>${maven-source-plugin.version}</source>
+                            <doclint>none</doclint>
+                            <doctitle>Brook ${project.version} API</doctitle>
+                            <windowtitle>Brook ${project.version} API</windowtitle>
+                            <includeDependencySources>true</includeDependencySources>
+                            <dependencySourceIncludes>
+                                <dependencySourceInclude>xyz.mytang0.brook:brook-*</dependencySourceInclude>
+                            </dependencySourceIncludes>
+                            <dependencySourceExcludes>
+                                <dependencySourceExclude>xyz.mytang0.brook:brook-demo</dependencySourceExclude>
+                                <dependencySourceExclude>xyz.mytang0.brook.demo:*</dependencySourceExclude>
+                            </dependencySourceExcludes>
+                            <links>
+                                <link>https://docs.oracle.com/javase/8/docs/api</link>
+                            </links>
                         </configuration>
                         <executions>
                             <execution>
-                                <id>attach-javadocs</id>
+                                <id>attach-javadoc</id>
                                 <goals>
                                     <goal>jar</goal>
                                 </goals>
@@ -174,6 +187,21 @@
                                 </goals>
                             </execution>
                         </executions>
+                    </plugin>
+
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>${publishing-maven-plugin.version}</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <tokenAuth>true</tokenAuth>
+                            <excludeArtifacts>
+                                <artifact>brook-demo</artifact>
+                                <artifact>brook-demo-spring</artifact>
+                            </excludeArtifacts>
+                        </configuration>
                     </plugin>
                 </plugins>
             </build>
@@ -461,9 +489,6 @@
                                 <requireJavaVersion>
                                     <version>1.8</version>
                                 </requireJavaVersion>
-                                <requireMavenVersion>
-                                    <version>3.5</version>
-                                </requireMavenVersion>
                             </rules>
                         </configuration>
                     </execution>
@@ -481,41 +506,34 @@
                         <compilerArg>-Xlint:deprecation</compilerArg>
                     </compilerArgs>
                     <fork>true</fork>
-                    <source>${compiler.version}</source>
-                    <target>${compiler.version}</target>
-                    <encoding>${project.build.sourceEncoding}</encoding>
+                    <source>${java.source.version}</source>
+                    <target>${java.target.version}</target>
+                    <encoding>${file.encoding}</encoding>
                 </configuration>
             </plugin>
 
             <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-resources-plugin</artifactId>
-                <version>${maven-resource-plugin.version}</version>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>flatten-maven-plugin</artifactId>
+                <version>${maven-flatten-plugin.version}</version>
                 <configuration>
-                    <encoding>${project.build.sourceEncoding}</encoding>
+                    <updatePomFile>true</updatePomFile>
+                    <flattenMode>oss</flattenMode>
                 </configuration>
-            </plugin>
-
-            <plugin>
-                <groupId>com.spotify</groupId>
-                <artifactId>docker-maven-plugin</artifactId>
-                <version>${docker.plugin.version}</version>
-                <configuration>
-                    <skipDocker>true</skipDocker>
-                </configuration>
-            </plugin>
-
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-source-plugin</artifactId>
-                <version>${maven-source-plugin.version}</version>
                 <executions>
                     <execution>
-                        <id>attach-sources</id>
-                        <phase>none</phase>
+                        <id>flatten</id>
                         <goals>
-                            <goal>jar</goal>
+                            <goal>flatten</goal>
                         </goals>
+                        <phase>process-resources</phase>
+                    </execution>
+                    <execution>
+                        <id>flatten.clean</id>
+                        <goals>
+                            <goal>clean</goal>
+                        </goals>
+                        <phase>clean</phase>
                     </execution>
                 </executions>
             </plugin>
@@ -526,8 +544,8 @@
                 <version>${maven-checkstyle-plugin.version}</version>
                 <configuration>
                     <configLocation>codestyle/checkstyle.xml</configLocation>
-                    <inputEncoding>UTF-8</inputEncoding>
-                    <outputEncoding>UTF-8</outputEncoding>
+                    <inputEncoding>${file.encoding}</inputEncoding>
+                    <outputEncoding>${file.encoding}</outputEncoding>
                     <consoleOutput>true</consoleOutput>
                     <includeTestSourceDirectory>true</includeTestSourceDirectory>
                     <failOnViolation>${checkstyle.fails.on.error}</failOnViolation>

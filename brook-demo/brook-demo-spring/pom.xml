@@ -7,7 +7,6 @@
         <groupId>xyz.mytang0.brook</groupId>
         <artifactId>brook-demo</artifactId>
         <version>${revision}</version>
-        <relativePath>../pom.xml</relativePath>
     </parent>
 
     <groupId>xyz.mytang0.brook.demo</groupId>
@@ -15,8 +14,6 @@
     <version>${revision}</version>
 
     <properties>
-        <skip.maven.deploy>true</skip.maven.deploy>
-
         <!-- plugins -->
         <spring-boot-maven-plugin.version>2.0.3.RELEASE</spring-boot-maven-plugin.version>
 

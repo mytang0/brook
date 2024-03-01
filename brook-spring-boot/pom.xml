@@ -7,12 +7,12 @@
         <groupId>xyz.mytang0.brook</groupId>
         <artifactId>brook-parent</artifactId>
         <version>${revision}</version>
-        <relativePath>../pom.xml</relativePath>
     </parent>
 
     <artifactId>brook-spring-boot</artifactId>
     <packaging>pom</packaging>
     <name>${project.artifactId}</name>
+    <description>The spring boot module of brook project.</description>
 
     <properties>
         <spring-boot.version>2.0.3.RELEASE</spring-boot.version>

@@ -7,12 +7,12 @@
         <groupId>xyz.mytang0.brook</groupId>
         <artifactId>brook-spi-extensions</artifactId>
         <version>${revision}</version>
-        <relativePath>../pom.xml</relativePath>
     </parent>
 
     <artifactId>brook-metadata-extensions</artifactId>
     <packaging>pom</packaging>
     <name>${project.artifactId}</name>
+    <description>The metadata extensions module of brook project.</description>
 
     <modules>
         <module>brook-metadata-http</module>
