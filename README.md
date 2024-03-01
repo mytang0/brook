@@ -8,7 +8,7 @@ In order to maximize the lightweight nature of the Brook engine, a deliberate se
 
 ### Maven dependency
 
-Specify the version appropriate for the project.
+Specify the version appropriate for the project, see [releases](https://github.com/mytang0/brook/releases).
 ```xml
 <properties>
     <dubbo.version>...</dubbo.version>
@@ -58,4 +58,24 @@ The definition of the testing process is located at 'resources/META-INF/flows'.
 
 ## Contributing
 
-Welcomes anyone that wants to help out in any way, whether that includes reporting problems, helping with documentation, or contributing code changes to fix bugs, add tests, or implement new features. You can report problems to request features in the [GitHub Issues](https://github.com/mytang0/brook/issues).
+Brook welcomes anyone that wants to help out in any way, whether that includes reporting problems, helping with documentation, or contributing code changes to fix bugs, add tests, or implement new features. You can report problems to request features in the [GitHub Issues](https://github.com/mytang0/brook/issues).
+
+### Code Contribute
+
+- Left comment under the issue that you want to take.
+- Fork Brook project to your GitHub repositories.
+- Clone and compile your Brook project.
+```bash
+git clone https://github.com/your_name/brook.git
+cd brook
+mvn clean install -DskipTests
+```
+- Check to a new branch and start your work.
+```bash
+git checkout -b my_feature
+```
+- Push your branch to your github.
+```bash
+git push origin my_feature
+```
+- Create a new PR to https://github.com/mytang0/brook/pulls .
