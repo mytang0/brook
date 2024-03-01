@@ -7,14 +7,13 @@
         <groupId>xyz.mytang0.brook</groupId>
         <artifactId>brook-spi-extensions</artifactId>
         <version>${revision}</version>
-        <relativePath>../pom.xml</relativePath>
     </parent>
 
     <artifactId>brook-oss-extensions</artifactId>
     <packaging>pom</packaging>
     <name>${project.artifactId}</name>
+    <description>The oss extensions module of brook project.</description>
 
     <modules>
-        <module>brook-oss-s3</module>
     </modules>
 </project>

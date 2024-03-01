@@ -7,12 +7,12 @@
         <groupId>xyz.mytang0.brook</groupId>
         <artifactId>brook-lock-extensions</artifactId>
         <version>${revision}</version>
-        <relativePath>../pom.xml</relativePath>
     </parent>
 
     <artifactId>brook-lock-redis</artifactId>
     <packaging>jar</packaging>
     <name>${project.artifactId}</name>
+    <description>The redis lock module of brook project.</description>
 
     <properties>
         <redisson.version>3.18.0</redisson.version>

@@ -13,9 +13,6 @@ import org.springframework.expression.spel.support.StandardEvaluationContext;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-/**
- * @link <a href="https://docs.spring.io/spring-framework/docs/3.2.x/spring-framework-reference/html/expressions.html">...</a>
- */
 @Slf4j
 public class SpelEngine implements Engine {
 

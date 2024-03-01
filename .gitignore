@@ -174,4 +174,5 @@ buildNumber.properties
 logs/
 .git/
 
+**/.flattened-pom.xml
 ~

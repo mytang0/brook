@@ -7,12 +7,12 @@
         <groupId>xyz.mytang0.brook</groupId>
         <artifactId>brook-task-extensions</artifactId>
         <version>${revision}</version>
-        <relativePath>../pom.xml</relativePath>
     </parent>
 
     <artifactId>brook-task-http</artifactId>
     <packaging>jar</packaging>
     <name>${project.artifactId}</name>
+    <description>The http task module of brook project.</description>
 
     <properties>
         <httpasyncclient.version>4.1.3</httpasyncclient.version>

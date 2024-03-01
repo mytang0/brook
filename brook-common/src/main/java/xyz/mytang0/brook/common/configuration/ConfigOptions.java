@@ -253,7 +253,7 @@ public class ConfigOptions {
     }
 
     /**
-     * Builder for {@link ConfigOption} of list of type {@link E}.
+     * Builder for {@link ConfigOption} of list of type E.
      *
      * @param <E> list element type of the option
      */

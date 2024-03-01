@@ -7,7 +7,6 @@
         <groupId>xyz.mytang0.brook</groupId>
         <artifactId>brook-parent</artifactId>
         <version>${revision}</version>
-        <relativePath>../pom.xml</relativePath>
     </parent>
 
     <artifactId>brook-demo</artifactId>
@@ -15,6 +14,7 @@
     <name>${project.artifactId}</name>
 
     <properties>
+        <skip.maven.deploy>true</skip.maven.deploy>
         <maven-archetype-plugin.version>3.2.0</maven-archetype-plugin.version>
     </properties>
 
