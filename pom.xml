@@ -109,8 +109,7 @@
         <maven-release-plugin.version>3.0.1</maven-release-plugin.version>
         <maven-gpg-plugin.version>1.6</maven-gpg-plugin.version>
         <maven-flatten-plugin.version>1.5.0</maven-flatten-plugin.version>
-        <!--Author customized version based on 0.3.1, supports JDK1.8-->
-        <publishing-maven-plugin.version>0.3.8</publishing-maven-plugin.version>
+        <publishing-maven-plugin.version>0.4.0</publishing-maven-plugin.version>
 
         <!-- Plugin configuration -->
         <checkstyle.fails.on.error>true</checkstyle.fails.on.error>
