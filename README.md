@@ -39,21 +39,9 @@ Specify the version appropriate for the project, see [releases](https://github.c
 </dependencies>
 ```
 
-### Maven archetype
+### Demo
 
-For expedited testing.
-
-```shell
-mvn archetype:generate                                  \
-  -DarchetypeGroupId=xyz.mytang0.brook.demo             \
-  -DarchetypeArtifactId=brook-demo-spring-archetype     \
-  -DarchetypeVersion=1.0.0-alpha                        \
-  -DgroupId=<my.groupid>                                \
-  -DartifactId=<my-artifactId>                          \
-  -DinteractiveMode=false                               \
-  -DarchetypeCatalog=internal
-```
-
+After cloning the repository, the demo is located in the brook-demo module.
 The definition of the testing process is located at 'resources/META-INF/flows'.
 
 ## Contributing
