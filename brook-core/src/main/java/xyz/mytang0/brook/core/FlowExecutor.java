@@ -1,5 +1,11 @@
 package xyz.mytang0.brook.core;
 
+import com.google.common.base.Joiner;
+import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.BooleanUtils;
+import org.apache.commons.lang3.StringUtils;
 import xyz.mytang0.brook.common.configuration.Configuration;
 import xyz.mytang0.brook.common.constants.Delimiter;
 import xyz.mytang0.brook.common.context.FlowContext;
@@ -26,6 +32,7 @@ import xyz.mytang0.brook.core.exception.FlowException;
 import xyz.mytang0.brook.core.exception.TerminateException;
 import xyz.mytang0.brook.core.execution.ExecutionProperties;
 import xyz.mytang0.brook.core.lock.FlowLockFacade;
+import xyz.mytang0.brook.core.lock.LockProperties;
 import xyz.mytang0.brook.core.metadata.MetadataFacade;
 import xyz.mytang0.brook.core.metadata.MetadataProperties;
 import xyz.mytang0.brook.core.monitor.DelayedTaskMonitor;
@@ -34,17 +41,12 @@ import xyz.mytang0.brook.core.queue.QueueProperties;
 import xyz.mytang0.brook.spi.cache.FlowCache;
 import xyz.mytang0.brook.spi.cache.FlowCacheFactory;
 import xyz.mytang0.brook.spi.computing.EngineActuator;
+import xyz.mytang0.brook.spi.config.Configurator;
 import xyz.mytang0.brook.spi.execution.ExecutionDAO;
 import xyz.mytang0.brook.spi.executor.ExecutorFactory;
 import xyz.mytang0.brook.spi.metadata.MetadataService;
 import xyz.mytang0.brook.spi.queue.QueueService;
 import xyz.mytang0.brook.spi.task.FlowTask;
-import com.google.common.base.Joiner;
-import lombok.Data;
-import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.collections4.CollectionUtils;
-import org.apache.commons.lang3.BooleanUtils;
-import org.apache.commons.lang3.StringUtils;
 
 import javax.validation.ValidationException;
 import java.util.ArrayList;
@@ -64,6 +66,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
+import static java.util.Objects.requireNonNull;
 import static xyz.mytang0.brook.core.constants.FlowConstants.DEFAULT_ENGINE_TYPE;
 import static xyz.mytang0.brook.core.constants.FlowConstants.DEFAULT_TIMEOUT_MS;
 import static xyz.mytang0.brook.core.constants.FlowConstants.LOCK_TRY_TIME_MS;
@@ -72,7 +75,6 @@ import static xyz.mytang0.brook.core.exception.FlowErrorCode.FLOW_EXECUTION_CONF
 import static xyz.mytang0.brook.core.exception.FlowErrorCode.FLOW_EXECUTION_ERROR;
 import static xyz.mytang0.brook.core.exception.FlowErrorCode.FLOW_NOT_EXIST;
 import static xyz.mytang0.brook.core.exception.FlowErrorCode.TASK_NOT_EXIST;
-import static xyz.mytang0.brook.core.executor.ExecutorEnum.ASYNC_EXECUTOR;
 import static xyz.mytang0.brook.core.executor.ExecutorEnum.FLOW_STARTER;
 import static xyz.mytang0.brook.core.utils.ParameterUtils.flowContext;
 import static xyz.mytang0.brook.core.utils.ParameterUtils.getFlowInput;
@@ -81,7 +83,6 @@ import static xyz.mytang0.brook.core.utils.ParameterUtils.getMappingValue;
 import static xyz.mytang0.brook.core.utils.ParameterUtils.getTaskInput;
 import static xyz.mytang0.brook.core.utils.ParameterUtils.getTaskOutput;
 import static xyz.mytang0.brook.core.utils.QueueUtils.getTaskDelayQueueName;
-import static java.util.Objects.requireNonNull;
 
 @Slf4j
 public class FlowExecutor<T extends FlowTask> {
@@ -96,8 +97,6 @@ public class FlowExecutor<T extends FlowTask> {
 
     private final ExecutorService flowStarter;
 
-    private final ExecutorService asyncExecutor;
-
     private final FlowCacheFactory flowCacheFactory;
 
     private final FlowAspect flowAspect;
@@ -111,17 +110,19 @@ public class FlowExecutor<T extends FlowTask> {
     private final DelayedTaskMonitorProperties delayedTaskMonitorProperties;
 
 
-    public FlowExecutor(FlowLockFacade flowLockFacade,
-                        FlowTaskRegistry<T> flowTaskRegistry,
-                        QueueProperties queueProperties,
-                        MetadataProperties metadataProperties,
-                        ExecutionProperties executionProperties,
-                        DelayedTaskMonitorProperties delayedTaskMonitorProperties) {
-        this.flowLockFacade = flowLockFacade;
+    public FlowExecutor(FlowTaskRegistry<T> flowTaskRegistry) {
+        Configurator configurator = ExtensionDirector
+                .getExtensionLoader(Configurator.class)
+                .getDefaultExtension();
+        this.flowLockFacade = new FlowLockFacade(
+                configurator.getConfig(LockProperties.class)
+        );
         this.flowTaskRegistry = flowTaskRegistry;
         this.flowAspect = new FlowAspect();
         this.taskAspect = new TaskAspect();
-        this.metadataService = new MetadataFacade(metadataProperties);
+        this.metadataService = new MetadataFacade(
+                configurator.getConfig(MetadataProperties.class)
+        );
         this.engineActuator = ExtensionDirector
                 .getExtensionLoader(EngineActuator.class)
                 .getDefaultExtension();
@@ -132,13 +133,9 @@ public class FlowExecutor<T extends FlowTask> {
                 .getExtensionLoader(ExecutorFactory.class)
                 .getDefaultExtension()
                 .getExecutor(FLOW_STARTER);
-        this.asyncExecutor = ExtensionDirector
-                .getExtensionLoader(ExecutorFactory.class)
-                .getDefaultExtension()
-                .getExecutor(ASYNC_EXECUTOR);
-        this.queueProperties = queueProperties;
-        this.executionProperties = executionProperties;
-        this.delayedTaskMonitorProperties = delayedTaskMonitorProperties;
+        this.queueProperties = configurator.getConfig(QueueProperties.class);
+        this.executionProperties = configurator.getConfig(ExecutionProperties.class);
+        this.delayedTaskMonitorProperties = configurator.getConfig(DelayedTaskMonitorProperties.class);
         DelayedTaskMonitor.init(this, flowLockFacade, delayedTaskMonitorProperties);
     }
 

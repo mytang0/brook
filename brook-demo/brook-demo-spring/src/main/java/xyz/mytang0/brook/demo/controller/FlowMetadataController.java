@@ -1,8 +1,5 @@
 package xyz.mytang0.brook.demo.controller;
 
-import xyz.mytang0.brook.common.metadata.definition.FlowDef;
-import xyz.mytang0.brook.core.metadata.MetadataFacade;
-import xyz.mytang0.brook.core.metadata.MetadataProperties;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -11,6 +8,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import xyz.mytang0.brook.common.extension.ExtensionDirector;
+import xyz.mytang0.brook.common.metadata.definition.FlowDef;
+import xyz.mytang0.brook.core.metadata.MetadataFacade;
+import xyz.mytang0.brook.core.metadata.MetadataProperties;
+import xyz.mytang0.brook.spi.config.Configurator;
 
 import javax.validation.Valid;
 
@@ -20,8 +22,13 @@ public class FlowMetadataController {
 
     private final MetadataFacade metadataFacade;
 
-    public FlowMetadataController(MetadataProperties metadataProperties) {
-        this.metadataFacade = new MetadataFacade(metadataProperties);
+    public FlowMetadataController() {
+        this.metadataFacade = new MetadataFacade(
+                ExtensionDirector
+                        .getExtensionLoader(Configurator.class)
+                        .getDefaultExtension()
+                        .getConfig(MetadataProperties.class)
+        );
     }
 
     @PostMapping

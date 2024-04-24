@@ -1,0 +1,2 @@
+env=xyz.mytang0.brook.core.config.EnvConfigSource
+properties=xyz.mytang0.brook.core.config.PropertiesConfigSource

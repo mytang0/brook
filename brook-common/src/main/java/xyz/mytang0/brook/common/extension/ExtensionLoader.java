@@ -1,13 +1,13 @@
 package xyz.mytang0.brook.common.extension;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import xyz.mytang0.brook.common.annotation.OrderComparator;
 import xyz.mytang0.brook.common.extension.injector.ExtensionInjector;
 import xyz.mytang0.brook.common.extension.loading.LoadingStrategy;
 import xyz.mytang0.brook.common.utils.Holder;
 import xyz.mytang0.brook.common.utils.ReflectUtils;
 import xyz.mytang0.brook.common.utils.StringUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -15,13 +15,11 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.net.URL;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TreeSet;
@@ -229,15 +227,15 @@ public class ExtensionLoader<T> {
             return (List<T>) this.cachedInstances.values()
                     .stream()
                     .map(Holder::get)
+                    .sorted(OrderComparator.INSTANCE)
                     .collect(Collectors.toList());
         }
         // Dynamic Loading
-        List<T> instances = new ArrayList<>();
-        extensionClasses.keySet().forEach(name ->
-                Optional.ofNullable(this.getExtension(name))
-                        .ifPresent(instances::add)
-        );
-        return instances;
+        return extensionClasses.keySet()
+                .stream()
+                .map(this::getExtension)
+                .sorted(OrderComparator.INSTANCE)
+                .collect(Collectors.toList());
     }
 
     @SuppressWarnings("unchecked")

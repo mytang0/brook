@@ -1,9 +1,11 @@
 package xyz.mytang0.brook.core.lock;
 
 import lombok.Data;
+import xyz.mytang0.brook.spi.config.ConfigProperties;
 
 import java.time.Duration;
 
+@ConfigProperties(prefix = "brook.lock")
 @Data
 public class LockProperties {
 

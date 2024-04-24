@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -22,12 +23,17 @@ public abstract class JsonUtils {
     private static final ObjectMapper DEFAULT = new ObjectMapper()
             .configure(FAIL_ON_UNKNOWN_PROPERTIES, false)
             .configure(FAIL_ON_UNRESOLVED_OBJECT_IDS, false)
+            .registerModule(new JavaTimeModule())
             .setSerializationInclusion(JsonInclude.Include.NON_NULL);
 
     private static volatile ObjectMapper objectMapper = DEFAULT;
 
     public static void setObjectMapper(ObjectMapper objectMapper) {
         JsonUtils.objectMapper = Optional.ofNullable(objectMapper).orElse(DEFAULT);
+    }
+
+    public static ObjectMapper getObjectMapper() {
+        return objectMapper;
     }
 
     public static String toJsonString(Object object) {
