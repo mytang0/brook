@@ -158,7 +158,7 @@ public class DefaultConfiguratorTest {
     @Test
     public void testGetConfig1() {
         properties.put("config8.name", "Brook");
-        Config8 config8 = configurator.getConfig(Config8.class);
+        Config8 config8 = configurator.refreshConfig(Config8.class);
         Assert.assertNotNull(config8);
         Assert.assertEquals(properties.get("config8.name"), config8.getName());
 
