@@ -1,2 +1,4 @@
 org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
   xyz.mytang0.brook.spring.boot.autoconfigure.FlowAutoConfiguration
+org.springframework.boot.env.EnvironmentPostProcessor=\
+  xyz.mytang0.brook.spring.boot.autoconfigure.SpringConfigSourceInitializer
