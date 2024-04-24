@@ -203,4 +203,21 @@ public abstract class MethodUtils {
             cls = cls.getSuperclass();
         }
     }
+
+    public static List<Method> getSetterMethods(Class<?> cls) {
+        List<Method> setters = new ArrayList<>();
+        Method[] methods = cls.getMethods();
+        for (Method method : methods) {
+            if (isSetter(method)) {
+                setters.add(method);
+            }
+        }
+        return setters;
+    }
+
+    private static boolean isSetter(Method method) {
+        return method.getName().startsWith("set")
+                && method.getParameterCount() == 1
+                && method.getReturnType().equals(void.class);
+    }
 }

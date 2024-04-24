@@ -14,4 +14,11 @@ public abstract class ReflectUtils {
     public static boolean isPrimitive(Class<?> cls) {
         return ClassUtils.isPrimitiveOrWrapper(cls);
     }
+
+    public static boolean isJdkClass(Class<?> cls) {
+        String packageName = cls.getPackage().getName();
+        return packageName.startsWith("java.") ||
+                packageName.startsWith("javax.") ||
+                packageName.startsWith("com.sun.");
+    }
 }

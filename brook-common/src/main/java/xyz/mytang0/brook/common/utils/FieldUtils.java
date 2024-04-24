@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Map;
@@ -179,15 +180,36 @@ public abstract class FieldUtils {
 
     public static Field getFieldByName(Object obj, String fieldName) {
         Class<?> superClass = obj.getClass();
+        return getFieldByName(superClass, fieldName);
+    }
 
-        while (superClass != Object.class) {
+    public static Field getFieldByName(Class<?> clazz, String fieldName) {
+        while (clazz != Object.class) {
             try {
-                return superClass.getDeclaredField(fieldName);
+                return clazz.getDeclaredField(fieldName);
             } catch (NoSuchFieldException var4) {
-                superClass = superClass.getSuperclass();
+                clazz = clazz.getSuperclass();
             }
         }
         return null;
+    }
+
+    public static void setFieldValue(Method method, Object instance, Object value) {
+        boolean isInaccessible = !method.isAccessible();
+        if (isInaccessible) {
+            method.setAccessible(true);
+        }
+        try {
+            method.invoke(instance, value);
+        } catch (IllegalAccessException
+                 | IllegalArgumentException
+                 | InvocationTargetException e) {
+            throw new RuntimeException(method.getName(), e);
+        } finally {
+            if (isInaccessible) {
+                method.setAccessible(false);
+            }
+        }
     }
 
     public static Map<String, Object> objectToMap(Object fromValue) {

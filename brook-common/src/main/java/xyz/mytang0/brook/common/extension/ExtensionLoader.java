@@ -229,15 +229,15 @@ public class ExtensionLoader<T> {
             return (List<T>) this.cachedInstances.values()
                     .stream()
                     .map(Holder::get)
+                    .sorted(OrderComparator.INSTANCE)
                     .collect(Collectors.toList());
         }
         // Dynamic Loading
-        List<T> instances = new ArrayList<>();
-        extensionClasses.keySet().forEach(name ->
-                Optional.ofNullable(this.getExtension(name))
-                        .ifPresent(instances::add)
-        );
-        return instances;
+        return extensionClasses.keySet()
+                .stream()
+                .map(this::getExtension)
+                .sorted(OrderComparator.INSTANCE)
+                .collect(Collectors.toList());
     }
 
     @SuppressWarnings("unchecked")
