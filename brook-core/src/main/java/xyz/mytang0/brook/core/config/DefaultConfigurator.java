@@ -1,6 +1,5 @@
 package xyz.mytang0.brook.core.config;
 
-import sun.reflect.generics.reflectiveObjects.ParameterizedTypeImpl;
 import xyz.mytang0.brook.common.constants.Delimiter;
 import xyz.mytang0.brook.common.extension.ExtensionDirector;
 import xyz.mytang0.brook.common.utils.FieldUtils;
@@ -14,6 +13,7 @@ import xyz.mytang0.brook.spi.config.Configurator;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.List;
 import java.util.Map;
@@ -95,8 +95,8 @@ public class DefaultConfigurator implements Configurator {
                     (Class<? extends ConfigValidator<T>>) annotation.validator();
             if (!ConfigValidator.NULL.class.isAssignableFrom(validator)) {
                 Type generictype = validator.getGenericInterfaces()[0];
-                if (generictype instanceof ParameterizedTypeImpl) {
-                    generictype = ((ParameterizedTypeImpl) generictype)
+                if (generictype instanceof ParameterizedType) {
+                    generictype = ((ParameterizedType) generictype)
                             .getActualTypeArguments()[0];
                     if (generictype instanceof Class
                             && type.isAssignableFrom((Class<?>) generictype)) {
