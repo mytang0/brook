@@ -3,6 +3,9 @@ package xyz.mytang0.brook.core.service;
 import lombok.Data;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.SystemUtils;
+import xyz.mytang0.brook.common.extension.ExtensionDirector;
+import xyz.mytang0.brook.spi.config.ConfigProperties;
+import xyz.mytang0.brook.spi.config.Configurator;
 
 import java.nio.file.Paths;
 
@@ -12,8 +15,11 @@ public class FlowLogService {
 
     private final FlowLogProperties properties;
 
-    public FlowLogService(FlowLogProperties properties) {
-        this.properties = properties;
+    public FlowLogService() {
+        this.properties = ExtensionDirector
+                .getExtensionLoader(Configurator.class)
+                .getDefaultExtension()
+                .getConfig(FlowLogProperties.class);
     }
 
     public String getLog(String id) {
@@ -21,6 +27,7 @@ public class FlowLogService {
                 + id + properties.getSuffix();
     }
 
+    @ConfigProperties(prefix = "brook.log")
     @Data
     public static class FlowLogProperties {
 

@@ -67,6 +67,31 @@ public class DefaultConfigurator implements Configurator {
     @SuppressWarnings("unchecked")
     private static <T> T bind(Class<T> type, String prefix, ConfigProperties annotation) {
 
+        T instance = Optional.ofNullable(bind(type, prefix))
+                .orElseGet(() -> newInstance(type));
+
+        // Validity verification.
+        if (annotation != null) {
+            Class<? extends ConfigValidator<T>> validator =
+                    (Class<? extends ConfigValidator<T>>) annotation.validator();
+            if (!ConfigValidator.NULL.class.isAssignableFrom(validator)) {
+                Type generictype = validator.getGenericInterfaces()[0];
+                if (generictype instanceof ParameterizedType) {
+                    generictype = ((ParameterizedType) generictype)
+                            .getActualTypeArguments()[0];
+                    if (generictype instanceof Class
+                            && type.isAssignableFrom((Class<?>) generictype)) {
+                        validate(validator, instance);
+                    }
+                }
+            }
+        }
+
+        return instance;
+    }
+
+    private static <T> T bind(Class<T> type, String prefix) {
+
         // Already sorted according to @Order.
         List<ConfigSource> configSources =
                 ExtensionDirector
@@ -87,23 +112,6 @@ public class DefaultConfigurator implements Configurator {
                                 }
                             }
                     );
-        }
-
-        // Validity verification.
-        if (annotation != null) {
-            Class<? extends ConfigValidator<T>> validator =
-                    (Class<? extends ConfigValidator<T>>) annotation.validator();
-            if (!ConfigValidator.NULL.class.isAssignableFrom(validator)) {
-                Type generictype = validator.getGenericInterfaces()[0];
-                if (generictype instanceof ParameterizedType) {
-                    generictype = ((ParameterizedType) generictype)
-                            .getActualTypeArguments()[0];
-                    if (generictype instanceof Class
-                            && type.isAssignableFrom((Class<?>) generictype)) {
-                        validate(validator, instanceReference.get());
-                    }
-                }
-            }
         }
 
         return instanceReference.get();
@@ -143,7 +151,7 @@ public class DefaultConfigurator implements Configurator {
                     && !ReflectUtils.isPrimitives(type)
                     && !ReflectUtils.isJdkClass(type)) {
 
-                value = bind(type, propertyName, null);
+                value = bind(type, propertyName);
             }
         }
 

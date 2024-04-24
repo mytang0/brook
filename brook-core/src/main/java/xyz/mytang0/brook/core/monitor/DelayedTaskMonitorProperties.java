@@ -1,9 +1,11 @@
 package xyz.mytang0.brook.core.monitor;
 
 import lombok.Data;
+import xyz.mytang0.brook.spi.config.ConfigProperties;
 
 import java.util.Set;
 
+@ConfigProperties(prefix = "brook.delayed.task.monitor")
 @Data
 public class DelayedTaskMonitorProperties {
 

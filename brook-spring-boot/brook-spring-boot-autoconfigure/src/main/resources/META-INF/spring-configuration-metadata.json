@@ -1,18 +1,6 @@
 {
   "hints": [],
   "groups": [
-    {
-      "sourceType": "xyz.mytang0.brook.spring.boot.autoconfigure.FlowAutoConfiguration",
-      "name": "brook.lock",
-      "sourceMethod": "flowLockProperties()",
-      "type": "xyz.mytang0.brook.core.lock.FlowLockFacade$LockProperties"
-    },
-    {
-      "sourceType": "xyz.mytang0.brook.spring.boot.autoconfigure.FlowAutoConfiguration",
-      "name": "brook.log",
-      "sourceMethod": "flowLogProperties()",
-      "type": "xyz.mytang0.brook.core.service.FlowLogService$FlowLogProperties"
-    }
   ],
   "properties": [
     {

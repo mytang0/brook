@@ -142,7 +142,7 @@ public class DefaultConfiguratorTest {
         Assert.assertEquals(properties.get("config8.name"), config8.getName());
 
         Config6 config6 = config8.getConfig6();
-        Assert.assertNull(config6);
+        Assert.assertNotNull(config6);
 
         String inner = "object";
         Config6 origin = new Config6();
@@ -163,7 +163,7 @@ public class DefaultConfiguratorTest {
         Assert.assertEquals(properties.get("config8.name"), config8.getName());
 
         Config6 config6 = config8.getConfig6();
-        Assert.assertNull(config6);
+        Assert.assertNotNull(config6);
 
         String inner = "object";
         Config6 origin = new Config6();
@@ -172,7 +172,7 @@ public class DefaultConfiguratorTest {
 
         Config8 newConfig8 = configurator.getConfig(Config8.class);
         config6 = newConfig8.getConfig6();
-        Assert.assertNull(config6);
+        Assert.assertNotNull(config6);
 
         Assert.assertEquals(config8, newConfig8);
     }
