@@ -134,6 +134,7 @@ public class DefaultConfigurator implements Configurator {
             for (ConfigSource configSource : configSources) {
                 if ((value = configSource.getProperty(propertyName)) != null) {
                     value = convertPropertyValue(value, type);
+                    break;
                 }
             }
 
