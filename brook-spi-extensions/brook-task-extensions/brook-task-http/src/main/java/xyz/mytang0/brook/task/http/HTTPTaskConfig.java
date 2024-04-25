@@ -1,7 +1,9 @@
 package xyz.mytang0.brook.task.http;
 
 import lombok.Data;
+import xyz.mytang0.brook.spi.config.ConfigProperties;
 
+@ConfigProperties(prefix = "brook.task.http")
 @Data
 public class HTTPTaskConfig {
 

@@ -41,7 +41,7 @@ import xyz.mytang0.brook.core.queue.QueueProperties;
 import xyz.mytang0.brook.spi.cache.FlowCache;
 import xyz.mytang0.brook.spi.cache.FlowCacheFactory;
 import xyz.mytang0.brook.spi.computing.EngineActuator;
-import xyz.mytang0.brook.spi.config.Configurator;
+import xyz.mytang0.brook.spi.config.ConfiguratorFacade;
 import xyz.mytang0.brook.spi.execution.ExecutionDAO;
 import xyz.mytang0.brook.spi.executor.ExecutorFactory;
 import xyz.mytang0.brook.spi.metadata.MetadataService;
@@ -111,17 +111,14 @@ public class FlowExecutor<T extends FlowTask> {
 
 
     public FlowExecutor(FlowTaskRegistry<T> flowTaskRegistry) {
-        Configurator configurator = ExtensionDirector
-                .getExtensionLoader(Configurator.class)
-                .getDefaultExtension();
         this.flowLockFacade = new FlowLockFacade(
-                configurator.getConfig(LockProperties.class)
+                ConfiguratorFacade.getConfig(LockProperties.class)
         );
         this.flowTaskRegistry = flowTaskRegistry;
         this.flowAspect = new FlowAspect();
         this.taskAspect = new TaskAspect();
         this.metadataService = new MetadataFacade(
-                configurator.getConfig(MetadataProperties.class)
+                ConfiguratorFacade.getConfig(MetadataProperties.class)
         );
         this.engineActuator = ExtensionDirector
                 .getExtensionLoader(EngineActuator.class)
@@ -133,9 +130,13 @@ public class FlowExecutor<T extends FlowTask> {
                 .getExtensionLoader(ExecutorFactory.class)
                 .getDefaultExtension()
                 .getExecutor(FLOW_STARTER);
-        this.queueProperties = configurator.getConfig(QueueProperties.class);
-        this.executionProperties = configurator.getConfig(ExecutionProperties.class);
-        this.delayedTaskMonitorProperties = configurator.getConfig(DelayedTaskMonitorProperties.class);
+        this.queueProperties =
+                ConfiguratorFacade.getConfig(QueueProperties.class);
+        this.executionProperties =
+                ConfiguratorFacade.getConfig(ExecutionProperties.class);
+        this.delayedTaskMonitorProperties =
+                ConfiguratorFacade.getConfig(DelayedTaskMonitorProperties.class);
+
         DelayedTaskMonitor.init(this, flowLockFacade, delayedTaskMonitorProperties);
     }
 

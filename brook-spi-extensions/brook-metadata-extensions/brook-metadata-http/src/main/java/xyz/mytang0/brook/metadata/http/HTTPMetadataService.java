@@ -1,11 +1,5 @@
 package xyz.mytang0.brook.metadata.http;
 
-import xyz.mytang0.brook.common.constants.Delimiter;
-import xyz.mytang0.brook.common.extension.Disposable;
-import xyz.mytang0.brook.common.extension.Selected;
-import xyz.mytang0.brook.common.metadata.definition.FlowDef;
-import xyz.mytang0.brook.common.utils.JsonUtils;
-import xyz.mytang0.brook.spi.metadata.MetadataService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
@@ -20,6 +14,13 @@ import org.apache.http.impl.nio.client.HttpAsyncClients;
 import org.apache.http.impl.nio.reactor.IOReactorConfig;
 import org.apache.http.protocol.HttpContext;
 import org.apache.http.util.EntityUtils;
+import xyz.mytang0.brook.common.constants.Delimiter;
+import xyz.mytang0.brook.common.extension.Disposable;
+import xyz.mytang0.brook.common.extension.Selected;
+import xyz.mytang0.brook.common.metadata.definition.FlowDef;
+import xyz.mytang0.brook.common.utils.JsonUtils;
+import xyz.mytang0.brook.spi.config.ConfiguratorFacade;
+import xyz.mytang0.brook.spi.metadata.MetadataService;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -57,7 +58,8 @@ public class HTTPMetadataService implements MetadataService, Disposable {
     private volatile Cache<String, FlowDef> cache;
 
     public HTTPMetadataService() {
-
+        this(ConfiguratorFacade
+                .getConfig(HTTPMetadataConfig.class));
     }
 
     public HTTPMetadataService(final HTTPMetadataConfig config) {
