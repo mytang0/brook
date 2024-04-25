@@ -2,9 +2,11 @@ package xyz.mytang0.brook.metadata.http;
 
 import xyz.mytang0.brook.common.utils.StringUtils;
 import lombok.Data;
+import xyz.mytang0.brook.spi.config.ConfigProperties;
 
 import java.time.Duration;
 
+@ConfigProperties(prefix = "brook.metadata.http")
 @Data
 public class HTTPMetadataConfig {
 

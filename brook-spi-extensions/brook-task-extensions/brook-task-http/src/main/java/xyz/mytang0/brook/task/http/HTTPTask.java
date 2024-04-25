@@ -1,19 +1,5 @@
 package xyz.mytang0.brook.task.http;
 
-import xyz.mytang0.brook.common.configuration.ConfigOption;
-import xyz.mytang0.brook.common.configuration.ConfigOptions;
-import xyz.mytang0.brook.common.configuration.Configuration;
-import xyz.mytang0.brook.common.constants.Delimiter;
-import xyz.mytang0.brook.common.extension.Disposable;
-import xyz.mytang0.brook.common.metadata.definition.TaskDef;
-import xyz.mytang0.brook.common.metadata.enums.TaskStatus;
-import xyz.mytang0.brook.common.metadata.instance.TaskInstance;
-import xyz.mytang0.brook.common.utils.ExceptionUtils;
-import xyz.mytang0.brook.common.utils.JsonUtils;
-import xyz.mytang0.brook.common.utils.StringUtils;
-import xyz.mytang0.brook.common.utils.token.TokenHandler;
-import xyz.mytang0.brook.common.utils.token.TokenParser;
-import xyz.mytang0.brook.spi.task.FlowTask;
 import org.apache.commons.collections4.MapUtils;
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
@@ -40,6 +26,21 @@ import org.apache.http.impl.nio.reactor.IOReactorConfig;
 import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.protocol.HttpContext;
 import org.apache.http.util.EntityUtils;
+import xyz.mytang0.brook.common.configuration.ConfigOption;
+import xyz.mytang0.brook.common.configuration.ConfigOptions;
+import xyz.mytang0.brook.common.configuration.Configuration;
+import xyz.mytang0.brook.common.constants.Delimiter;
+import xyz.mytang0.brook.common.extension.Disposable;
+import xyz.mytang0.brook.common.metadata.definition.TaskDef;
+import xyz.mytang0.brook.common.metadata.enums.TaskStatus;
+import xyz.mytang0.brook.common.metadata.instance.TaskInstance;
+import xyz.mytang0.brook.common.utils.ExceptionUtils;
+import xyz.mytang0.brook.common.utils.JsonUtils;
+import xyz.mytang0.brook.common.utils.StringUtils;
+import xyz.mytang0.brook.common.utils.token.TokenHandler;
+import xyz.mytang0.brook.common.utils.token.TokenParser;
+import xyz.mytang0.brook.spi.config.ConfiguratorFacade;
+import xyz.mytang0.brook.spi.task.FlowTask;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
@@ -58,6 +59,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.http.entity.ContentType.APPLICATION_FORM_URLENCODED;
+import static org.apache.http.entity.ContentType.APPLICATION_JSON;
 import static xyz.mytang0.brook.task.http.HTTPTask.Options.BODY;
 import static xyz.mytang0.brook.task.http.HTTPTask.Options.CHARSET;
 import static xyz.mytang0.brook.task.http.HTTPTask.Options.HEADERS;
@@ -67,8 +70,6 @@ import static xyz.mytang0.brook.task.http.HTTPTask.Options.REASON_PHRASE;
 import static xyz.mytang0.brook.task.http.HTTPTask.Options.STATUS_CODE;
 import static xyz.mytang0.brook.task.http.HTTPTask.Options.URI;
 import static xyz.mytang0.brook.task.http.HTTPTask.Options.VARIABLES;
-import static org.apache.http.entity.ContentType.APPLICATION_FORM_URLENCODED;
-import static org.apache.http.entity.ContentType.APPLICATION_JSON;
 
 public class HTTPTask implements FlowTask, Disposable {
 
@@ -100,14 +101,15 @@ public class HTTPTask implements FlowTask, Disposable {
                 }
             };
 
-    private volatile boolean uninitialized = true;
+    private final HTTPTaskConfig config;
 
-    private volatile HTTPTaskConfig config;
+    private volatile boolean uninitialized = true;
 
     private volatile CloseableHttpAsyncClient httpAsyncClient;
 
-    public void setConfig(HTTPTaskConfig config) {
-        this.config = config;
+    public HTTPTask() {
+        this.config = ConfiguratorFacade
+                .getConfig(HTTPTaskConfig.class);
     }
 
     @Override

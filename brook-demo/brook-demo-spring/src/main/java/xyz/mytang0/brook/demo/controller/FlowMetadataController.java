@@ -8,11 +8,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import xyz.mytang0.brook.common.extension.ExtensionDirector;
 import xyz.mytang0.brook.common.metadata.definition.FlowDef;
 import xyz.mytang0.brook.core.metadata.MetadataFacade;
 import xyz.mytang0.brook.core.metadata.MetadataProperties;
-import xyz.mytang0.brook.spi.config.Configurator;
+import xyz.mytang0.brook.spi.config.ConfiguratorFacade;
 
 import javax.validation.Valid;
 
@@ -24,9 +23,7 @@ public class FlowMetadataController {
 
     public FlowMetadataController() {
         this.metadataFacade = new MetadataFacade(
-                ExtensionDirector
-                        .getExtensionLoader(Configurator.class)
-                        .getDefaultExtension()
+                ConfiguratorFacade
                         .getConfig(MetadataProperties.class)
         );
     }
