@@ -20,11 +20,6 @@
 
     <dependencies>
         <dependency>
-            <groupId>xyz.mytang0.brook</groupId>
-            <artifactId>brook-spi</artifactId>
-        </dependency>
-
-        <dependency>
             <groupId>org.redisson</groupId>
             <artifactId>redisson</artifactId>
             <version>${redisson.version}</version>

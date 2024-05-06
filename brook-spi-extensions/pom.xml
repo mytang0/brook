@@ -26,14 +26,12 @@
         <brook-spi.version>${project.version}</brook-spi.version>
     </properties>
 
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>xyz.mytang0.brook</groupId>
-                <artifactId>brook-spi</artifactId>
-                <version>${brook-spi.version}</version>
-                <scope>provided</scope>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>xyz.mytang0.brook</groupId>
+            <artifactId>brook-spi</artifactId>
+            <version>${brook-spi.version}</version>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
 </project>

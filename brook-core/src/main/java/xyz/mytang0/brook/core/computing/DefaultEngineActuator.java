@@ -42,7 +42,9 @@ public class DefaultEngineActuator implements EngineActuator {
 
     @Override
     public Object compute(String engineType, String expression, Object input) {
-        Engine engine = engineExtensionLoader.getExtension(engineType);
+        Engine engine = engineType == null
+                ? engineExtensionLoader.getDefaultExtension()
+                : engineExtensionLoader.getExtension(engineType);
         if (engine == null) {
             throw new TerminateException(String.format("Engine %s does not exist", engineType));
         }

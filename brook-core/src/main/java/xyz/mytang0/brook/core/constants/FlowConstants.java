@@ -20,9 +20,6 @@ public interface FlowConstants {
 
     String EXTENSION = "extension";
 
-    // Engine
-    String DEFAULT_ENGINE_TYPE = "javascript";
-
     // Cache
     String CACHE_MAX_SIZE_KEY = "flow.cache.max-size";
 

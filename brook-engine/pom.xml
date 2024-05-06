@@ -20,5 +20,12 @@
             <artifactId>brook-core</artifactId>
             <version>${project.version}</version>
         </dependency>
+
+        <!-- Default Computing Engine -->
+        <dependency>
+            <groupId>xyz.mytang0.brook</groupId>
+            <artifactId>brook-computing-javascript</artifactId>
+            <version>${project.version}</version>
+        </dependency>
     </dependencies>
 </project>
