@@ -11,7 +11,7 @@ In order to maximize the lightweight nature of the Brook engine, a deliberate se
 Specify the version appropriate for the project, see [releases](https://github.com/mytang0/brook/releases).
 ```xml
 <properties>
-    <dubbo.version>...</dubbo.version>
+    <brook.version>...</brook.version>
 </properties>
 ```
 
