@@ -5,6 +5,7 @@ import xyz.mytang0.brook.common.metadata.definition.FlowDef;
 import xyz.mytang0.brook.spi.metadata.MetadataService;
 import org.apache.commons.lang3.StringUtils;
 
+import java.util.Objects;
 import java.util.Optional;
 
 public class MetadataFacade implements MetadataService {
@@ -39,6 +40,14 @@ public class MetadataFacade implements MetadataService {
     public FlowDef getFlow(String name) {
         init();
         return instance.getFlow(name);
+    }
+
+    @Override
+    public FlowDef getFlow(String name, Integer version) {
+        init();
+        return Objects.nonNull(version)
+                ? instance.getFlow(name, version)
+                : instance.getFlow(name);
     }
 
     private void init() {

@@ -151,7 +151,9 @@ public class FlowExecutor<T extends FlowTask> {
             requireNonNull(startFlowReq.getName(),
                     "The 'flowName' is null");
             startFlowReq.setFlowDef(
-                    metadataService.getFlow(startFlowReq.getName()));
+                    metadataService.getFlow(
+                            startFlowReq.getName(),
+                            startFlowReq.getVersion()));
         }
         requireNonNull(startFlowReq.getFlowDef(),
                 String.format("The flowDef of '%s' not exist",
@@ -176,7 +178,9 @@ public class FlowExecutor<T extends FlowTask> {
             requireNonNull(startFlowReq.getName(),
                     "The 'flowName' is null");
             startFlowReq.setFlowDef(
-                    metadataService.getFlow(startFlowReq.getName()));
+                    metadataService.getFlow(
+                            startFlowReq.getName(),
+                            startFlowReq.getVersion()));
         }
         requireNonNull(startFlowReq.getFlowDef(),
                 String.format("The flowDef of '%s' not exist",
