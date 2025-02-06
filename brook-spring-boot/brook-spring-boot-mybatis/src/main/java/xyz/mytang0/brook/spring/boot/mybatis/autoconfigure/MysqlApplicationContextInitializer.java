@@ -1,5 +1,6 @@
 package xyz.mytang0.brook.spring.boot.mybatis.autoconfigure;
 
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import xyz.mytang0.brook.spring.boot.mybatis.constants.TableNameConstants;
 import com.baomidou.mybatisplus.autoconfigure.MybatisPlusProperties;
 import lombok.extern.slf4j.Slf4j;
@@ -85,7 +86,12 @@ public class MysqlApplicationContextInitializer
                                                  @Nonnull String beanName) throws BeansException {
         if (bean instanceof MybatisPlusProperties) {
             MybatisPlusProperties mybatisPlusProperties = (MybatisPlusProperties) bean;
-            mybatisPlusProperties.getConfiguration().getVariables().putAll(dynamicTableNames);
+            MybatisConfiguration configuration = mybatisPlusProperties.getConfiguration();
+            if (configuration == null) {
+                mybatisPlusProperties.setConfiguration(
+                        configuration = new MybatisConfiguration());
+            }
+            configuration.getVariables().putAll(dynamicTableNames);
         }
         return bean;
     }

@@ -1,18 +1,17 @@
 package xyz.mytang0.brook.core.tasks;
 
+import org.apache.commons.lang3.StringUtils;
 import xyz.mytang0.brook.common.configuration.ConfigOption;
 import xyz.mytang0.brook.common.configuration.ConfigOptions;
 import xyz.mytang0.brook.common.configuration.Configuration;
 import xyz.mytang0.brook.common.context.FlowContext;
 import xyz.mytang0.brook.common.holder.UserHolder;
 import xyz.mytang0.brook.common.metadata.extension.Extension;
-import xyz.mytang0.brook.common.metadata.instance.FlowInstance;
 import xyz.mytang0.brook.common.metadata.instance.TaskInstance;
 import xyz.mytang0.brook.common.metadata.model.StartFlowReq;
 import xyz.mytang0.brook.common.metadata.model.User;
 import xyz.mytang0.brook.core.FlowExecutor;
 import xyz.mytang0.brook.spi.task.FlowTask;
-import org.apache.commons.lang3.StringUtils;
 
 import java.util.HashSet;
 import java.util.Map;
@@ -95,12 +94,9 @@ public class SubFlowTask implements FlowTask {
             return;
         }
 
-        FlowInstance flowInstance = FlowContext.getCurrentFlow();
-        String reason = StringUtils.isBlank(flowInstance.getReasonForNotCompleting())
-                ? "Parent flow has been terminated with status: " + flowInstance.getStatus()
-                : flowInstance.getReasonForNotCompleting();
-
-        flowExecutor.terminate(taskInstance.getSubFlowId(), reason);
+        flowExecutor.terminate(
+                taskInstance.getSubFlowId(),
+                "Cancel");
     }
 
     public static class Options {

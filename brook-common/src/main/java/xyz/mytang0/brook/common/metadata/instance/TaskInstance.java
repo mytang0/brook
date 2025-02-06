@@ -105,8 +105,32 @@ public class TaskInstance implements Serializable {
         copy.setStatus(status);
         copy.setReasonForNotCompleting(reasonForNotCompleting);
         copy.setInput(input);
+        copy.setOutput(output);
+        copy.setSubFlowId(subFlowId);
+        copy.setParentTaskId(parentTaskId);
+        copy.setHangTaskId(hangTaskId);
+        copy.setProgress(progress);
+        copy.setLink(link);
         copy.setExtension(extension);
+        copy.setExecuted(executed);
+        copy.setHanging(hanging);
+        copy.setScheduledTime(scheduledTime);
+        copy.setStartTime(startTime);
+        copy.setLastUpdated(lastUpdated);
+        copy.setEndTime(endTime);
+        copy.setStartDelayMs(startDelayMs);
+        copy.setRetryTime(retryTime);
+        copy.setRetryCount(retryCount);
+
         return copy;
+    }
+
+    public TaskInstance deepCopy() {
+        TaskInstance newInstance = JsonUtils.readValue(
+                JsonUtils.toJsonString(this),
+                TaskInstance.class);
+        newInstance.setTaskDef(taskDef);
+        return newInstance;
     }
 
     @JsonIgnore

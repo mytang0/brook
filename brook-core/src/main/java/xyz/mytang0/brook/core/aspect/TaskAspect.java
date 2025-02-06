@@ -1,6 +1,5 @@
 package xyz.mytang0.brook.core.aspect;
 
-import xyz.mytang0.brook.common.metadata.enums.TaskStatus;
 import xyz.mytang0.brook.common.metadata.instance.TaskInstance;
 import xyz.mytang0.brook.core.callback.TaskCallbackFacade;
 import xyz.mytang0.brook.core.listener.TaskListenerFacade;
@@ -26,13 +25,7 @@ public final class TaskAspect {
     }
 
     public void onTerminated(final TaskInstance taskInstance) {
-        TaskStatus status = taskInstance.getStatus();
-        if (status.isTerminal()
-                && !status.isHanged()
-                && !status.isRetried()
-                && !taskInstance.isExecuted()) {
-            taskCallbackFacade.onTerminated(taskInstance);
-            taskListenerFacade.onTerminated(taskInstance);
-        }
+        taskCallbackFacade.onTerminated(taskInstance);
+        taskListenerFacade.onTerminated(taskInstance);
     }
 }
