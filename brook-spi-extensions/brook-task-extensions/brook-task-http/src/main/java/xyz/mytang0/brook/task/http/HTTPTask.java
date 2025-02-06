@@ -557,7 +557,7 @@ public class HTTPTask implements FlowTask, Disposable {
                 .withDescription("The HTTP reason-phrase.");
     }
 
-    protected enum MethodEnum {
+    public enum MethodEnum {
         PUT,
         POST,
         GET,
