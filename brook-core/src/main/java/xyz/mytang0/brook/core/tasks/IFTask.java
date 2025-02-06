@@ -1,5 +1,11 @@
 package xyz.mytang0.brook.core.tasks;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import lombok.Data;
+import lombok.Setter;
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.BooleanUtils;
+import org.apache.commons.lang3.StringUtils;
 import xyz.mytang0.brook.common.configuration.ConfigOption;
 import xyz.mytang0.brook.common.configuration.ConfigOptions;
 import xyz.mytang0.brook.common.configuration.Configuration;
@@ -14,15 +20,10 @@ import xyz.mytang0.brook.common.utils.JsonUtils;
 import xyz.mytang0.brook.core.FlowExecutor;
 import xyz.mytang0.brook.spi.computing.EngineActuator;
 import xyz.mytang0.brook.spi.task.FlowTask;
-import com.fasterxml.jackson.core.type.TypeReference;
-import lombok.Data;
-import org.apache.commons.collections4.CollectionUtils;
-import org.apache.commons.lang3.BooleanUtils;
-import org.apache.commons.lang3.StringUtils;
-import xyz.mytang0.brook.core.utils.ParameterUtils;
 
+import javax.validation.constraints.NotNull;
 import java.io.Serializable;
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -30,6 +31,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+
+import static xyz.mytang0.brook.core.utils.ParameterUtils.flowContext;
 
 public class IFTask implements FlowTask {
 
@@ -46,16 +49,13 @@ public class IFTask implements FlowTask {
 
     private final EngineActuator engineActuator;
 
+    @Setter
     private FlowExecutor<?> flowExecutor;
 
     public IFTask() {
         this.engineActuator = ExtensionDirector
                 .getExtensionLoader(EngineActuator.class)
                 .getDefaultExtension();
-    }
-
-    public void setFlowExecutor(FlowExecutor<?> flowExecutor) {
-        this.flowExecutor = flowExecutor;
     }
 
     @Override
@@ -95,7 +95,7 @@ public class IFTask implements FlowTask {
                             engineActuator.compute(
                                     engineType,
                                     branch.getCondition(),
-                                    ParameterUtils.flowContext(context.getFlowInstance())
+                                    flowContext(context.getFlowInstance())
                             )
                     )
                     .orElseGet(branch::getCondition);
@@ -111,28 +111,18 @@ public class IFTask implements FlowTask {
             hitIndex++;
         }
 
-        List<TaskInstance> scheduledTasks = new ArrayList<>();
-
         // Build if task self.
         TaskInstance ifTask = TaskInstance.create(context.getTaskDef());
         ifTask.setFlowId(context.getFlowInstance().getFlowId());
         ifTask.setInput(context.getInput());
-        scheduledTasks.add(ifTask);
 
         if (CollectionUtils.isNotEmpty(hitTaskDefs)) {
-            TaskDef scheduled = hitTaskDefs.get(0);
             Map<String, Object> ifOutput = new HashMap<>();
             ifOutput.put(HIT_INDEX_KEY, hitIndex);
-            ifOutput.put(INNER_LAST_TASK, scheduled.getName());
             ifTask.setOutput(ifOutput);
-
-            scheduledTasks.addAll(
-                    flowExecutor.getMappedTasks(
-                            context.getFlowInstance(), scheduled)
-            );
         }
 
-        return scheduledTasks;
+        return Collections.singletonList(ifTask);
     }
 
     @Override
@@ -141,6 +131,7 @@ public class IFTask implements FlowTask {
         return true;
     }
 
+    @SuppressWarnings("all")
     @Override
     public TaskDef next(final TaskDef toBeSearched, final TaskDef target) {
 
@@ -155,57 +146,56 @@ public class IFTask implements FlowTask {
             throw new IllegalArgumentException("The target task is null");
         }
 
-        final List<Branch> branches = getBranches(toBeSearched);
-
         final FlowInstance currentFlow = FlowContext.getCurrentFlow();
 
-        if (currentFlow != null) {
-            Optional<TaskInstance> mappingTaskOptional =
-                    currentFlow.getTaskByName(toBeSearched.getName());
+        Optional<TaskInstance> mappingTaskOptional =
+                currentFlow.getTaskByName(toBeSearched.getName());
 
-            if (mappingTaskOptional.isPresent()) {
-
-                TaskInstance mappingTask = mappingTaskOptional.get();
-
-                if (mappingTask.getOutput() != null) {
-
-                    Map<String, Object> output
-                            = mappingTask.getOutput();
-
-                    int hitIndex = (int) output.get(HIT_INDEX_KEY);
-
-                    Branch mappingBranch = branches.get(hitIndex);
-
-                    TaskDef nextTask = findNextTaskFromChildren(mappingBranch.getCases(), target);
-
-                    if (nextTask != null) {
-                        output.put(INNER_LAST_TASK, nextTask.getName());
-                    }
-
-                    return nextTask;
-                }
-            }
+        if (!mappingTaskOptional.isPresent()) {
+            return null;
         }
 
-        TaskDef nextTask = null;
+        TaskInstance mappingTask = mappingTaskOptional.get();
 
-        for (Branch branch : branches) {
+        if (mappingTask.getOutput() == null) {
+            throw new IllegalStateException("When next, the IF task output null");
+        }
 
-            if (CollectionUtils.isEmpty(branch.getCases())) {
-                break;
-            }
+        Map<String, Object> output = mappingTask.getOutput();
 
-            nextTask = findNextTaskFromChildren(branch.getCases(), target);
-            if (nextTask != null) {
-                break;
-            }
+        int hitIndex = (int) output.get(HIT_INDEX_KEY);
+
+        final List<Branch> branches = getBranches(toBeSearched);
+
+        if (CollectionUtils.isEmpty(branches)) {
+            return null;
+        }
+
+        // None match
+        if (branches.size() <= hitIndex) {
+            return null;
+        }
+
+        Branch mappingBranch = branches.get(hitIndex);
+
+        TaskDef nextTask;
+
+        if (toBeSearched == target
+                || toBeSearched.getName().equals(target.getName())) {
+            nextTask = mappingBranch.getCases().get(0);
+        } else {
+            nextTask = findNextTaskFromChildren(mappingBranch.getCases(), target);
+        }
+
+        if (nextTask != null && nextTask != TaskDef.MATCHED) {
+            output.put(INNER_LAST_TASK, nextTask.getName());
         }
 
         return nextTask;
     }
 
-    @SuppressWarnings("unchecked")
-    private List<Branch> getBranches(final TaskDef taskdef) {
+    @SuppressWarnings("all")
+    private List<Branch> getBranches(@NotNull final TaskDef taskdef) {
         List<Branch> branches = taskdef.getParsed();
 
         if (branches == null) {
@@ -233,24 +223,20 @@ public class IFTask implements FlowTask {
         return branches;
     }
 
+    @SuppressWarnings("all")
     private TaskDef findNextTaskFromChildren(final List<TaskDef> children, final TaskDef target) {
         Iterator<TaskDef> iterator = children.iterator();
 
         while (iterator.hasNext()) {
-            TaskDef toBeSearchedSubTask = iterator.next();
-
-            if (target.getName().equals(toBeSearchedSubTask.getName())) {
-                break;
-            }
-
-            TaskDef nextTask = flowExecutor.getNextTask(toBeSearchedSubTask, target);
-            if (nextTask != null) {
+            TaskDef nextTask =
+                    flowExecutor.getNextTask(iterator.next(), target);
+            if (nextTask == TaskDef.MATCHED) {
+                return iterator.hasNext()
+                        ? iterator.next()
+                        : TaskDef.MATCHED;
+            } else if (nextTask != null) {
                 return nextTask;
             }
-        }
-
-        if (iterator.hasNext()) {
-            return iterator.next();
         }
 
         return null;

@@ -334,6 +334,10 @@ public abstract class ParameterUtils {
     public static Map<String, Object> flowContext(final FlowInstance flowInstance) {
         final Map<String, Object> context = new HashMap<>();
 
+        if (flowInstance == null) {
+            return context;
+        }
+
         Map<String, Object> flowContext = new HashMap<>();
         flowContext.put(FlowConstants.ID, flowInstance.getFlowId());
         flowContext.put(FlowConstants.DEF, flowInstance.getFlowDef());
@@ -364,6 +368,11 @@ public abstract class ParameterUtils {
 
     public static Map<String, Object> taskContext(final TaskInstance taskInstance) {
         Map<String, Object> taskContext = new HashMap<>();
+
+        if (taskInstance == null) {
+            return taskContext;
+        }
+
         taskContext.put(FlowConstants.ID, taskInstance.getTaskId());
         taskContext.put(FlowConstants.DEF, taskInstance.getTaskDef());
         taskContext.put(FlowConstants.STATUS, taskInstance.getStatus());
@@ -371,6 +380,7 @@ public abstract class ParameterUtils {
         taskContext.put(FlowConstants.OUTPUT, taskInstance.getOutput());
         taskContext.put(FlowConstants.EXTENSION, taskInstance.getExtension());
         taskContext.put(FlowConstants.INSTANCE, taskInstance);
+
         return taskContext;
     }
 

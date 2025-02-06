@@ -1,22 +1,26 @@
 package xyz.mytang0.brook.common.metadata.instance;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import lombok.Data;
 import xyz.mytang0.brook.common.holder.UserHolder;
 import xyz.mytang0.brook.common.metadata.definition.FlowDef;
+import xyz.mytang0.brook.common.metadata.definition.TaskDef;
 import xyz.mytang0.brook.common.metadata.enums.FlowStatus;
 import xyz.mytang0.brook.common.metadata.extension.Extension;
 import xyz.mytang0.brook.common.metadata.model.User;
 import xyz.mytang0.brook.common.utils.IDUtils;
+import xyz.mytang0.brook.common.utils.JsonUtils;
 import xyz.mytang0.brook.common.utils.StringUtils;
 import xyz.mytang0.brook.common.utils.TimeUtils;
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import lombok.Data;
 
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Data
 public class FlowInstance implements Serializable {
@@ -108,6 +112,30 @@ public class FlowInstance implements Serializable {
 
     public boolean hasParent() {
         return StringUtils.isNotBlank(parentFlowId);
+    }
+
+    public FlowInstance deepCopy() {
+        FlowInstance newInstance = JsonUtils.readValue(
+                JsonUtils.toJsonString(this),
+                FlowInstance.class);
+        newInstance.setFlowDef(flowDef);
+
+        Optional.ofNullable(this.getTaskInstances())
+                .ifPresent(taskInstances -> {
+                    Map<String, TaskDef> taskDefMap =
+                            this.getTaskInstances().stream()
+                                    .collect(Collectors.toMap(
+                                            TaskInstance::getTaskId,
+                                            TaskInstance::getTaskDef));
+
+                    newInstance.getTaskInstances().forEach(taskInstance -> {
+                        if (taskInstance.getTaskDef() == null) {
+                            taskInstance.setTaskDef(
+                                    taskDefMap.get(taskInstance.getTaskId()));
+                        }
+                    });
+                });
+        return newInstance;
     }
 
     public static FlowInstance create(FlowDef flowDef) {

@@ -209,8 +209,16 @@ public class TaskInstance implements Serializable {
         taskInstance.setStatus(TaskStatus.SCHEDULED);
         taskInstance.setScheduledTime(TimeUtils.currentTimeMillis());
         Optional.ofNullable(taskDef.getControlDef())
-                .ifPresent(controlDef ->
-                        taskInstance.setStartDelayMs(controlDef.getStartDelayMs())
+                .ifPresent(controlDef -> {
+                            long startDelayMs
+                                    = controlDef.getStartDelayMs();
+                            if (startDelayMs > 0) {
+                                taskInstance.setStartDelayMs(startDelayMs);
+                                taskInstance.setScheduledTime(
+                                        taskInstance.getScheduledTime()
+                                                + startDelayMs);
+                            }
+                        }
                 );
         return taskInstance;
     }

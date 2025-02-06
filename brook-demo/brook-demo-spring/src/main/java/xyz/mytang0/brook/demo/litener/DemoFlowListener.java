@@ -16,10 +16,11 @@ public class DemoFlowListener implements FlowListener {
 
     @Override
     public void onTerminated(FlowInstance flowInstance) {
-        log.info("flowId: {} flowName: {} status: {}, statusSet: {}",
+        log.info("flowId: {} flowName: {} status: {}, reason: {} statusSet: {}",
                 flowInstance.getFlowId(),
                 flowInstance.getFlowName(),
                 flowInstance.getStatus(),
+                flowInstance.getReasonForNotCompleting(),
                 flowInstance.getTaskInstances().stream()
                         .map(taskInstance ->
                                 new Status(

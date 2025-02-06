@@ -57,6 +57,11 @@ public interface FlowTask extends Options {
             throw new IllegalArgumentException("The target task is null");
         }
 
+        if (toBeSearched.equals(target)
+                || toBeSearched.getName().equals(target.getName())) {
+            return TaskDef.MATCHED;
+        }
+
         return null;
     }
 }
