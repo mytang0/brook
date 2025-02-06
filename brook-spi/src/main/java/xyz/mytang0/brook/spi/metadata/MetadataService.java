@@ -13,4 +13,14 @@ public interface MetadataService {
     void deleteFlow(String name);
 
     FlowDef getFlow(String name);
+
+    default void deleteFlow(String name, Integer version) {
+        assert version != null;
+        deleteFlow(name);
+    }
+
+    default FlowDef getFlow(String name, Integer version) {
+        assert version != null;
+        return getFlow(name);
+    }
 }

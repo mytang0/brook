@@ -41,13 +41,15 @@ public class FlowMetadataController {
     }
 
     @DeleteMapping
-    public Boolean delete(@RequestParam("flowName") String flowName) {
-        metadataFacade.deleteFlow(flowName);
+    public Boolean delete(@RequestParam("flowName") String flowName,
+                          @RequestParam(value = "flowVersion", required = false) Integer flowVersion) {
+        metadataFacade.deleteFlow(flowName, flowVersion);
         return Boolean.TRUE;
     }
 
     @GetMapping
-    public FlowDef get(@RequestParam("flowName") String flowName) {
-        return metadataFacade.getFlow(flowName);
+    public FlowDef get(@RequestParam("flowName") String flowName,
+                       @RequestParam(value = "flowVersion", required = false) Integer flowVersion) {
+        return metadataFacade.getFlow(flowName, flowVersion);
     }
 }

@@ -116,14 +116,24 @@ public class HTTPMetadataService implements MetadataService, Disposable {
         throw new UnsupportedOperationException();
     }
 
+    @Override
     public FlowDef getFlow(String name) {
-        validate();
-        return config.isEnableCache()
-                ? cache.get(name, __ -> getFromServerPoint(name))
-                : getFromServerPoint(name);
+        return getFlow(name, null);
     }
 
-    private FlowDef getFromServerPoint(String name) {
+    @Override
+    public FlowDef getFlow(String name, Integer version) {
+        validate();
+        String cacheKey =
+                version != null
+                        ? name + Delimiter.AT + version
+                        : name;
+        return config.isEnableCache()
+                ? cache.get(cacheKey, __ -> getFromServerPoint(name, version))
+                : getFromServerPoint(name, version);
+    }
+
+    private FlowDef getFromServerPoint(String name, Integer version) {
 
         httpAsyncClient.start();
 
@@ -134,13 +144,23 @@ public class HTTPMetadataService implements MetadataService, Disposable {
             throw new RuntimeException(uee);
         }
 
-        String uriWithParams = config.getServerUri()
-                + Delimiter.QUESTION_MARK
-                + config.getNameKey()
-                + Delimiter.EQUAL
-                + name;
+        StringBuilder uriWithParamsBuilder =
+                new StringBuilder()
+                        .append(config.getServerUri())
+                        .append(Delimiter.QUESTION_MARK)
+                        .append(config.getNameKey())
+                        .append(Delimiter.EQUAL)
+                        .append(name);
 
-        HttpGet httpGet = new HttpGet(URI.create(uriWithParams));
+        if (version != null) {
+            uriWithParamsBuilder
+                    .append(Delimiter.AND)
+                    .append(config.getVersionKey())
+                    .append(Delimiter.EQUAL)
+                    .append(version);
+        }
+
+        HttpGet httpGet = new HttpGet(URI.create(uriWithParamsBuilder.toString()));
 
         Future<HttpResponse> responseFuture =
                 httpAsyncClient.execute(httpGet, EMPTY_CALLBACK);
@@ -154,8 +174,8 @@ public class HTTPMetadataService implements MetadataService, Disposable {
                     name, httpGet.getURI());
             return null;
         } catch (ExecutionException e) {
-            log.error(String.format("HTTP request %s metadata from %s exception",
-                    name, httpGet.getURI()), e);
+            log.error("HTTP request {} metadata from {} exception",
+                    name, httpGet.getURI(), e);
             return null;
         }
 

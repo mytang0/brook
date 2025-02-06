@@ -73,15 +73,16 @@ public class FlowTaskRegistry<T extends FlowTask> {
                                     String taskType = instance.getType();
                                     taskRegistry.putIfAbsent(taskType, instance);
                                 } catch (Exception exception) {
-                                    log.error(String.format("Registry [%s] task fail",
-                                            instance.getClass()), exception);
+                                    log.error("Registry [{}] task fail",
+                                            instance.getClass(), exception);
                                 }
                             }
                     );
+                    return taskRegistry.get(type);
                 }
             }
         }
-        return taskRegistry.get(type);
+        return t;
     }
 
     public List<T> getFlowTasks() {

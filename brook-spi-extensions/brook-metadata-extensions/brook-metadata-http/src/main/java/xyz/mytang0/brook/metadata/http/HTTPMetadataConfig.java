@@ -22,6 +22,12 @@ public class HTTPMetadataConfig {
     private String nameKey = "name";
 
     /**
+     * We obtain metadata from the metadata center through a http get request.
+     * This attribute identifies the request key of the metadata. The default is 'version'.
+     */
+    private String versionKey = "version";
+
+    /**
      * The response result is wrapped.
      */
     private boolean wrapped = true;

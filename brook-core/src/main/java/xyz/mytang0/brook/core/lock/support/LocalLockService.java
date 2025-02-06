@@ -30,7 +30,7 @@ public class LocalLockService implements LockService {
             new CacheLoader<String, ReentrantLock>() {
                 @Override
                 public ReentrantLock load(String key) {
-                    assert key.length() != 0;
+                    assert !key.isEmpty();
                     return new ReentrantLock(true);
                 }
             };
@@ -67,7 +67,10 @@ public class LocalLockService implements LockService {
         long startTimeStamp = TimeUtils.currentTimeMillis();
         long leaseTimeStamp = startTimeStamp + unit.toMillis(leaseTime);
         try {
-            acquired = CACHE.getUnchecked(lockId).tryLock(timeToTry, unit);
+            ReentrantLock lock = CACHE.getUnchecked(lockId);
+            if (lock != null) {
+                acquired = lock.tryLock(timeToTry, unit);
+            }
             return acquired;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -85,7 +88,7 @@ public class LocalLockService implements LockService {
                         } catch (Exception ignored) {
                         }
                     };
-                    // Just overwrite the latest.
+                    // Overwrite the latest.
                     Runnable oldTimer = releaseTimers.put(lockId, timer);
                     if (oldTimer != null) {
                         releaseScheduled.remove(oldTimer);

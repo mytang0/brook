@@ -105,8 +105,32 @@ public class TaskInstance implements Serializable {
         copy.setStatus(status);
         copy.setReasonForNotCompleting(reasonForNotCompleting);
         copy.setInput(input);
+        copy.setOutput(output);
+        copy.setSubFlowId(subFlowId);
+        copy.setParentTaskId(parentTaskId);
+        copy.setHangTaskId(hangTaskId);
+        copy.setProgress(progress);
+        copy.setLink(link);
         copy.setExtension(extension);
+        copy.setExecuted(executed);
+        copy.setHanging(hanging);
+        copy.setScheduledTime(scheduledTime);
+        copy.setStartTime(startTime);
+        copy.setLastUpdated(lastUpdated);
+        copy.setEndTime(endTime);
+        copy.setStartDelayMs(startDelayMs);
+        copy.setRetryTime(retryTime);
+        copy.setRetryCount(retryCount);
+
         return copy;
+    }
+
+    public TaskInstance deepCopy() {
+        TaskInstance newInstance = JsonUtils.readValue(
+                JsonUtils.toJsonString(this),
+                TaskInstance.class);
+        newInstance.setTaskDef(taskDef);
+        return newInstance;
     }
 
     @JsonIgnore
@@ -150,6 +174,13 @@ public class TaskInstance implements Serializable {
                 .orElse(defaultValue);
     }
 
+    public void mergeExtension(Extension pending) {
+        if (pending != null && !pending.isEmpty()) {
+            initExtension();
+            extension.putAll(pending);
+        }
+    }
+
     public void setExtension(String key, String value) {
         initExtension();
         extension.put(key, value);
@@ -179,8 +210,16 @@ public class TaskInstance implements Serializable {
         taskInstance.setScheduledTime(TimeUtils.currentTimeMillis());
         Optional.ofNullable(taskDef.getControlDef())
                 .ifPresent(controlDef -> {
-                    taskInstance.setStartDelayMs(controlDef.getStartDelayMs());
-                });
+                            long startDelayMs
+                                    = controlDef.getStartDelayMs();
+                            if (startDelayMs > 0) {
+                                taskInstance.setStartDelayMs(startDelayMs);
+                                taskInstance.setScheduledTime(
+                                        taskInstance.getScheduledTime()
+                                                + startDelayMs);
+                            }
+                        }
+                );
         return taskInstance;
     }
 

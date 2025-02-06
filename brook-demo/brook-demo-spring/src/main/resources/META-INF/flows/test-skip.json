@@ -1,0 +1,64 @@
+{
+  "name": "test-skip",
+  "description": "for showtime",
+  "taskDefs": [
+    {
+      "type": "COMPUTING",
+      "name": "compute1",
+      "input": {
+        "source": "compute1"
+      }
+    },
+    {
+      "type": "HTTP",
+      "name": "skip-work",
+      "input": {
+        "uri": "http://127.0.0.1:8080/skip/test/work",
+        "method": "POST"
+      },
+      "hangDef": {
+        "determineTaskDef": {
+          "type": "HTTP",
+          "name": "query",
+          "input": {
+            "uri": "http://127.0.0.1:8080/skip/test/query",
+            "method": "GET",
+            "params": {
+              "id": "${output.body}"
+            }
+          },
+          "checkDef": {
+            "retryDef": {
+              "retryCondition": "$.body == 'fail'"
+            }
+          },
+          "controlDef": {
+            "retryCount": 200,
+            "retryDelayMs": 5000
+          }
+        }
+      }
+    },
+    {
+      "type": "COMPUTING",
+      "name": "compute2",
+      "input": {
+        "source": "compute2"
+      }
+    },
+    {
+      "type": "COMPUTING",
+      "name": "compute3",
+      "input": {
+        "source": "compute3"
+      }
+    },
+    {
+      "type": "COMPUTING",
+      "name": "compute4",
+      "input": {
+        "source": "compute4"
+      }
+    }
+  ]
+}

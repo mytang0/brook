@@ -164,6 +164,10 @@ public class TaskableAnnotationTask implements BeanPostProcessor {
                                 } else {
                                     log.error("Spring method invoke fail", targetThrowable);
 
+                                    if (targetThrowable instanceof TerminateException) {
+                                        throw (TerminateException) targetThrowable;
+                                    }
+
                                     taskInstance.setStatus(TaskStatus.FAILED);
                                     taskInstance.setReasonForNotCompleting(
                                             ExceptionUtils.getMessage(targetThrowable));

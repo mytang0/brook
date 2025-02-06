@@ -1,28 +1,26 @@
 package xyz.mytang0.brook.core.tasks;
 
-import xyz.mytang0.brook.common.extension.ExtensionDirector;
-import xyz.mytang0.brook.common.utils.JsonUtils;
-import xyz.mytang0.brook.core.FlowExecutor;
-import xyz.mytang0.brook.spi.task.FlowTask;
+import com.fasterxml.jackson.core.type.TypeReference;
+import lombok.Data;
+import lombok.Setter;
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
 import xyz.mytang0.brook.common.configuration.ConfigOption;
 import xyz.mytang0.brook.common.configuration.ConfigOptions;
 import xyz.mytang0.brook.common.configuration.Configuration;
 import xyz.mytang0.brook.common.context.FlowContext;
 import xyz.mytang0.brook.common.context.TaskMapperContext;
+import xyz.mytang0.brook.common.extension.ExtensionDirector;
 import xyz.mytang0.brook.common.metadata.definition.TaskDef;
-import xyz.mytang0.brook.spi.computing.EngineActuator;
 import xyz.mytang0.brook.common.metadata.enums.TaskStatus;
 import xyz.mytang0.brook.common.metadata.instance.FlowInstance;
 import xyz.mytang0.brook.common.metadata.instance.TaskInstance;
-import com.fasterxml.jackson.core.type.TypeReference;
-import lombok.Data;
-import org.apache.commons.collections4.CollectionUtils;
-import org.apache.commons.lang3.StringUtils;
-import xyz.mytang0.brook.core.utils.ParameterUtils;
+import xyz.mytang0.brook.common.utils.JsonUtils;
+import xyz.mytang0.brook.core.FlowExecutor;
+import xyz.mytang0.brook.spi.computing.EngineActuator;
+import xyz.mytang0.brook.spi.task.FlowTask;
 
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -30,6 +28,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+
+import static xyz.mytang0.brook.core.utils.ParameterUtils.flowContext;
 
 public class SwitchTask implements FlowTask {
 
@@ -41,16 +41,13 @@ public class SwitchTask implements FlowTask {
 
     private final EngineActuator engineActuator;
 
+    @Setter
     private FlowExecutor<?> flowExecutor;
 
     public SwitchTask() {
         this.engineActuator = ExtensionDirector
                 .getExtensionLoader(EngineActuator.class)
                 .getDefaultExtension();
-    }
-
-    public void setFlowExecutor(FlowExecutor<?> flowExecutor) {
-        this.flowExecutor = flowExecutor;
     }
 
     @Override
@@ -87,7 +84,7 @@ public class SwitchTask implements FlowTask {
                                 engineActuator.compute(
                                         engineType,
                                         taskDefInput.getString(Options.CASE),
-                                        ParameterUtils.flowContext(context.getFlowInstance())
+                                        flowContext(context.getFlowInstance())
                                 )
                         )
                         .orElseGet(() -> taskDefInput.getString(Options.CASE))
@@ -101,8 +98,6 @@ public class SwitchTask implements FlowTask {
             matchedCaseKey = taskDefInput.getString(Options.DEFAULT_CASE_KEY);
         }
 
-        List<TaskInstance> scheduledTasks = new ArrayList<>();
-
         // Build switch task self.
         TaskInstance switchTask = TaskInstance.create(context.getTaskDef());
         switchTask.setFlowId(context.getFlowInstance().getFlowId());
@@ -110,22 +105,8 @@ public class SwitchTask implements FlowTask {
         SwitchOutput switchOutput = new SwitchOutput();
         switchOutput.setMatchedCaseKey(matchedCaseKey);
         switchTask.setOutput(switchOutput);
-        scheduledTasks.add(switchTask);
 
-        // Matched task.
-        scheduledTasks.addAll(
-                Optional.ofNullable(decisionCases.get(matchedCaseKey))
-                        .filter(CollectionUtils::isNotEmpty)
-                        .map(hitTaskDefs -> {
-                            TaskDef scheduled = hitTaskDefs.get(0);
-                            switchOutput.setInnerLastTask(scheduled.getName());
-                            return flowExecutor.getMappedTasks(
-                                    context.getFlowInstance(), scheduled);
-                        })
-                        .orElse(Collections.emptyList())
-        );
-
-        return scheduledTasks;
+        return Collections.singletonList(switchTask);
     }
 
     @Override
@@ -134,6 +115,7 @@ public class SwitchTask implements FlowTask {
         return true;
     }
 
+    @SuppressWarnings("all")
     @Override
     public TaskDef next(final TaskDef toBeSearched, final TaskDef target) {
 
@@ -148,52 +130,52 @@ public class SwitchTask implements FlowTask {
             throw new IllegalArgumentException("The target task is null");
         }
 
-        final Map<String, List<TaskDef>> decisionCases = getDecisionCases(toBeSearched);
-
         final FlowInstance currentFlow = FlowContext.getCurrentFlow();
 
-        if (currentFlow != null) {
-            Optional<TaskInstance> mappingTaskOptional =
-                    currentFlow.getTaskByName(toBeSearched.getName());
+        Optional<TaskInstance> mappingTaskOptional =
+                currentFlow.getTaskByName(toBeSearched.getName());
 
-            if (mappingTaskOptional.isPresent()) {
-
-                TaskInstance mappingTask = mappingTaskOptional.get();
-
-                if (mappingTask.getOutput() != null) {
-
-                    SwitchOutput switchOutput = mappingTask.getOutput();
-
-                    List<TaskDef> mappingTaskDefs = decisionCases.get(
-                            switchOutput.getMatchedCaseKey()
-                    );
-
-                    TaskDef nextTask = findNextTaskFromChildren(mappingTaskDefs, target);
-
-                    if (nextTask != null) {
-                        switchOutput.setInnerLastTask(nextTask.getName());
-                    }
-
-                    return nextTask;
-                }
-            }
+        if (!mappingTaskOptional.isPresent()) {
+            return null;
         }
 
-        TaskDef nextTask = null;
+        TaskInstance mappingTask = mappingTaskOptional.get();
 
-        Collection<List<TaskDef>> candidates = decisionCases.values();
+        if (mappingTask.getOutput() == null) {
+            throw new IllegalStateException("When next, the SWITCH task output null");
+        }
 
-        for (List<TaskDef> children : candidates) {
-            nextTask = findNextTaskFromChildren(children, target);
-            if (nextTask != null) {
-                break;
-            }
+        SwitchOutput switchOutput = JsonUtils.convertValue(
+                mappingTask.getOutput(), SwitchOutput.class);
+
+        final Map<String, List<TaskDef>> decisionCases =
+                getDecisionCases(toBeSearched);
+
+        List<TaskDef> mappingTaskDefs = decisionCases.get(
+                switchOutput.getMatchedCaseKey()
+        );
+
+        if (CollectionUtils.isEmpty(mappingTaskDefs)) {
+            return null;
+        }
+
+        TaskDef nextTask;
+
+        if (toBeSearched == target
+                || toBeSearched.getName().equals(target.getName())) {
+            nextTask = mappingTaskDefs.get(0);
+        } else {
+            nextTask = findNextTaskFromChildren(mappingTaskDefs, target);
+        }
+
+        if (nextTask != null && nextTask != TaskDef.MATCHED) {
+            switchOutput.setInnerLastTask(nextTask.getName());
         }
 
         return nextTask;
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings("all")
     private Map<String, List<TaskDef>> getDecisionCases(final TaskDef taskdef) {
         Map<String, List<TaskDef>> decisionCases = taskdef.getParsed();
         if (decisionCases == null) {
@@ -220,24 +202,20 @@ public class SwitchTask implements FlowTask {
         return decisionCases;
     }
 
+    @SuppressWarnings("all")
     private TaskDef findNextTaskFromChildren(final List<TaskDef> children, final TaskDef target) {
         Iterator<TaskDef> iterator = children.iterator();
 
         while (iterator.hasNext()) {
-            TaskDef toBeSearchedSubTask = iterator.next();
-
-            if (target.getName().equals(toBeSearchedSubTask.getName())) {
-                break;
-            }
-
-            TaskDef nextTask = flowExecutor.getNextTask(toBeSearchedSubTask, target);
-            if (nextTask != null) {
+            TaskDef nextTask =
+                    flowExecutor.getNextTask(iterator.next(), target);
+            if (nextTask == TaskDef.MATCHED) {
+                return iterator.hasNext()
+                        ? iterator.next()
+                        : TaskDef.MATCHED;
+            } else if (nextTask != null) {
                 return nextTask;
             }
-        }
-
-        if (iterator.hasNext()) {
-            return iterator.next();
         }
 
         return null;

@@ -22,6 +22,8 @@ public class TaskDef implements Serializable {
 
     private static final long serialVersionUID = -8797791731692389319L;
 
+    public static final TaskDef MATCHED = new TaskDef();
+
     @NotBlank
     private String type;
 
