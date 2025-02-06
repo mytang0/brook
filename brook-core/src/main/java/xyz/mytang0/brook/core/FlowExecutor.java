@@ -269,9 +269,18 @@ public class FlowExecutor<T extends FlowTask> {
         }
     }
 
-    public void execute(final TaskInstance taskInstance) {
+    private void execute(final TaskInstance taskInstance) {
         if (taskInstance.getStatus().isFinished()) {
             return;
+        }
+
+        if (taskInstance.isHanging()) {
+            TaskInstance parentTaskInstance
+                    = getTask(taskInstance.getParentTaskId());
+            if (parentTaskInstance == null
+                    || !parentTaskInstance.getStatus().isHanged()) {
+                return;
+            }
         }
 
         boolean isNeedUpdate;
@@ -359,7 +368,7 @@ public class FlowExecutor<T extends FlowTask> {
     }
 
     public void terminate(String flowId, String reason) {
-        // Try to wait for safe point for 30 seconds, otherwise force terminate.
+        // Try to wait for a safe point for 30 seconds, otherwise force terminate.
         boolean locked = flowLockFacade.acquireLock(flowId, LOCK_TRY_TIME_MS);
         if (!locked) {
             log.warn("Safe point not reached, force terminate flow: {}.", flowId);
@@ -586,6 +595,21 @@ public class FlowExecutor<T extends FlowTask> {
     }
 
     public void skipTask(final SkipTaskReq skipTaskReq) {
+        if (!flowLockFacade.acquireLock(skipTaskReq.getFlowId(), LOCK_TRY_TIME_MS)) {
+            throw new IllegalStateException(
+                    String.format("Error acquiring lock when skip flow: %s task: %s",
+                            skipTaskReq.getFlowId(),
+                            skipTaskReq.getTaskName()));
+        }
+
+        try {
+            skipTaskUnsafe(skipTaskReq);
+        } finally {
+            flowLockFacade.releaseLock(skipTaskReq.getFlowId());
+        }
+    }
+
+    private void skipTaskUnsafe(final SkipTaskReq skipTaskReq) {
         FlowInstance flowInstance = getFlow(skipTaskReq.getFlowId());
         if (!flowInstance.getStatus().isRunning()) {
             throw new IllegalStateException(String.format(
@@ -604,24 +628,77 @@ public class FlowExecutor<T extends FlowTask> {
                     flowInstance.getFlowName()));
         }
 
-        if (flowInstance.getTaskByName(skipTaskReq.getTaskName()).isPresent()) {
-            throw new IllegalStateException(String.format(
-                    "The task %s has already been processed, cannot be skipped",
-                    skipTaskReq.getTaskName()));
+        /*
+         There are three cases of skipping:
+         Case 1: the task has not started yet.
+         Case 2: the task has started but is not over yet.
+         Case 3: the task has ended, return directly.
+        */
+        Optional<TaskInstance> optionalTaskInstance =
+                flowInstance.getTaskByName(skipTaskReq.getTaskName());
+
+        TaskInstance skippedTaskInstance = null;
+
+        // Case 3.
+        if (optionalTaskInstance.isPresent()
+                && (skippedTaskInstance
+                = optionalTaskInstance.get()).isExecuted()
+                && !skippedTaskInstance.getStatus().isHanged()) {
+            log.info("The task {} {} has ended, return directly",
+                    skipTaskReq.getTaskName(),
+                    skippedTaskInstance.getTaskId());
+            return;
         }
 
-        TaskInstance skipTaskInstance = TaskInstance.create(taskDef);
-        skipTaskInstance.setStartTime(TimeUtils.currentTimeMillis());
-        skipTaskInstance.setStatus(TaskStatus.SKIPPED);
-        skipTaskInstance.setInput(skipTaskReq.getInput());
-        skipTaskInstance.setOutput(skipTaskReq.getOutput());
-        skipTaskInstance.setEndTime(TimeUtils.currentTimeMillis());
+        // Case 2.
+        if (optionalTaskInstance.isPresent()) {
+            if (isCancellable(skippedTaskInstance)) {
+                T flowTask = flowTaskRegistry.getFlowTask(taskDef.getType());
+                try {
+                    FlowContext.setCurrentFlow(flowInstance);
+                    flowTask.cancel(skippedTaskInstance.copy());
+                } catch (Throwable throwable) {
+                    log.error(
+                            "Error canceling flow task:{}/{} in flow: {}",
+                            taskDef.getType(),
+                            skippedTaskInstance.getTaskId(),
+                            flowInstance.getFlowId(),
+                            throwable);
+                } finally {
+                    FlowContext.removeCurrentFlow();
+                }
+            }
 
-        if (CollectionUtils.isNotEmpty(
-                createTasks(Collections.singletonList(skipTaskInstance)))) {
-            taskAspect.onTerminated(skipTaskInstance);
-            executePerfectlyUnsafe(flowInstance);
+            final List<TaskInstance> tasksToBeUpdated = new ArrayList<>();
+            tasksToBeUpdated.add(skippedTaskInstance);
+
+            // Skip hanging tasks.
+            if (skippedTaskInstance.getStatus().isHanged()) {
+                flowInstance.getTaskById(skippedTaskInstance.getHangTaskId())
+                        .filter(TaskInstance::isHanging)
+                        .filter(__ -> !__.isExecuted())
+                        .ifPresent(hanging -> {
+                            hanging.setStatus(TaskStatus.SKIPPED);
+                            hanging.setEndTime(TimeUtils.currentTimeMillis());
+                            hanging.setReasonForNotCompleting("Active Skip");
+
+                            tasksToBeUpdated.add(hanging);
+                        });
+            }
+
+            skippedTaskInstance.setExecuted(false);
+            skippedTaskInstance.setStatus(TaskStatus.SKIPPED);
+            skippedTaskInstance.setOutput(skipTaskReq.getOutput());
+            skippedTaskInstance.setEndTime(TimeUtils.currentTimeMillis());
+
+            updateTasks(tasksToBeUpdated);
         }
+
+        // Case 1.
+        flowInstance.getSkipTasks().add(skipTaskReq.getTaskName());
+
+        // Decide.
+        executePerfectlyUnsafe(flowInstance);
     }
 
     public FlowInstance getCropFlow(String flowId) {
@@ -691,12 +768,12 @@ public class FlowExecutor<T extends FlowTask> {
         flowInstance.getTaskInstances().forEach(taskInstance -> {
             if (taskInstance.isExecuted()) {
                 executedTaskNames.add(taskInstance.getTaskName());
-            } else if (!taskInstance.getStatus().isSkipped()) {
+            } else {
                 pendingTasks.add(taskInstance);
             }
         });
 
-        // Are there any tasks that are being retried.
+        // Are there any tasks that are being retried?
         boolean hasRetriesInProgress = false;
 
         final Map<String, TaskInstance> tasksToBeScheduled = new LinkedHashMap<>();
@@ -875,8 +952,8 @@ public class FlowExecutor<T extends FlowTask> {
         try {
             triggerFailureFlow(flowInstance, failureFlowName);
         } catch (Throwable throwable) {
-            log.error(String.format("Failed to start failure flow: %s",
-                    failureFlowName), throwable);
+            log.error("Failed to start failure flow: {}",
+                    failureFlowName, throwable);
         }
 
         List<String> erroredTasks = cancelNonTerminalTasks(flowInstance);
@@ -915,11 +992,7 @@ public class FlowExecutor<T extends FlowTask> {
 
         if (CollectionUtils.isNotEmpty(flowInstance.getTaskInstances())) {
             for (TaskInstance taskInstance : flowInstance.getTaskInstances()) {
-                if (!taskInstance.getStatus().isTerminal()
-                        // If the task is executed asynchronously, it also needs to be canceled.
-                        || taskInstance.getStatus().isHanged()
-                        // Task is retrying.
-                        || taskInstance.isRetryable()) {
+                if (isCancellable(taskInstance)) {
 
                     final TaskDef taskDef = taskInstance.getTaskDef();
 
@@ -952,6 +1025,14 @@ public class FlowExecutor<T extends FlowTask> {
         }
 
         return errorTasks;
+    }
+
+    private boolean isCancellable(final TaskInstance taskInstance) {
+        return !taskInstance.getStatus().isTerminal()
+                // If the task is executed asynchronously, it also needs to be canceled.
+                || taskInstance.getStatus().isHanged()
+                // Task is retrying.
+                || taskInstance.isRetryable();
     }
 
     private void checkFlowTimeout(final FlowInstance flowInstance) {
@@ -1110,29 +1191,28 @@ public class FlowExecutor<T extends FlowTask> {
             boolean isTaskSkipped = false;
 
             if (toBeScheduled != null) {
+                isTaskSkipped = flowInstance.getSkipTasks()
+                        .contains(toBeScheduled.getName());
                 TaskDef.ControlDef controlDef = toBeScheduled.getControlDef();
                 TaskDef.SkipDef skipDef;
 
-                if (controlDef != null
+                if (!isTaskSkipped
+                        && controlDef != null
                         && (skipDef = controlDef.getSkipDef()) != null
                         && StringUtils.isNotBlank(skipDef.getSkipCondition())) {
 
-                    isTaskSkipped = flowInstance.getSkipTasks().contains(toBeScheduled.getName());
+                    isTaskSkipped =
+                            BooleanUtils.toBoolean(
+                                    String.valueOf(
+                                            engineActuator.compute(
+                                                    skipDef.getEngineType(),
+                                                    skipDef.getSkipCondition(),
+                                                    flowContext(flowInstance))
+                                    )
+                            );
 
-                    if (!isTaskSkipped) {
-                        isTaskSkipped =
-                                BooleanUtils.toBoolean(
-                                        String.valueOf(
-                                                engineActuator.compute(
-                                                        skipDef.getEngineType(),
-                                                        skipDef.getSkipCondition(),
-                                                        flowContext(flowInstance))
-                                        )
-                                );
-
-                        if (isTaskSkipped) {
-                            flowInstance.getSkipTasks().add(toBeScheduled.getName());
-                        }
+                    if (isTaskSkipped) {
+                        flowInstance.getSkipTasks().add(toBeScheduled.getName());
                     }
                 }
             }
@@ -1308,12 +1388,14 @@ public class FlowExecutor<T extends FlowTask> {
         if (taskInstance.getStatus().isScheduled()
                 && checkConcurrency(taskInstance)) {
             TaskInstance retryTask = getRetryTask(taskInstance);
-            taskInstance.setReasonForNotCompleting(
-                    taskInstance.getReasonForNotCompleting()
-                            + "(concurrency limit)"
-            );
-            addToQueue(Collections.singletonList(retryTask));
-            return true;
+            if (retryTask != null) {
+                taskInstance.setReasonForNotCompleting(
+                        taskInstance.getReasonForNotCompleting()
+                                + "(concurrency limit)"
+                );
+                addToQueue(Collections.singletonList(retryTask));
+                return true;
+            }
         }
 
         log.info("Start execute task: {} {}",
@@ -1385,7 +1467,7 @@ public class FlowExecutor<T extends FlowTask> {
     }
 
     private String getCacheKey(final TaskInstance taskInstance) {
-        // Note: json order problem
+        // Note: JSON order problem
         return taskInstance.getTaskName()
                 + Delimiter.COLON
                 + JsonUtils.toJsonString(taskInstance.getInput());
@@ -1507,6 +1589,8 @@ public class FlowExecutor<T extends FlowTask> {
         Optional.ofNullable(hangingTask.getParentTaskId())
                 .filter(StringUtils::isNotBlank)
                 .flatMap(flowInstance::getTaskById)
+                .filter(parentTask ->
+                        parentTask.getStatus().isHanged())
                 .ifPresent(parentTask -> {
 
                     parentTask.setExecuted(false);

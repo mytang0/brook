@@ -1,9 +1,5 @@
 package xyz.mytang0.brook.demo.controller;
 
-import xyz.mytang0.brook.common.metadata.instance.FlowInstance;
-import xyz.mytang0.brook.common.metadata.model.StartFlowReq;
-import xyz.mytang0.brook.common.metadata.model.TaskResult;
-import xyz.mytang0.brook.core.FlowExecutor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -11,6 +7,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import xyz.mytang0.brook.common.metadata.instance.FlowInstance;
+import xyz.mytang0.brook.common.metadata.model.SkipTaskReq;
+import xyz.mytang0.brook.common.metadata.model.StartFlowReq;
+import xyz.mytang0.brook.common.metadata.model.TaskResult;
+import xyz.mytang0.brook.core.FlowExecutor;
 
 import javax.validation.Valid;
 
@@ -38,6 +39,11 @@ public class FlowInstanceController {
     @PostMapping("/execute")
     public void execute(@RequestBody @Valid TaskResult taskResult) {
         flowExecutor.updateTask(taskResult);
+    }
+
+    @PostMapping("/skip")
+    public void skip(@RequestBody @Valid SkipTaskReq skipTaskReq) {
+        flowExecutor.skipTask(skipTaskReq);
     }
 
     @PutMapping("/decide")
