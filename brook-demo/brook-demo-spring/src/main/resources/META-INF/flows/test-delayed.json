@@ -1,0 +1,19 @@
+{
+  "name": "test-delayed",
+  "description": "for unit testing",
+  "controlDef": {
+    "timeoutMs": 5000
+  },
+  "taskDefs": [
+    {
+      "type": "COMPUTING",
+      "name": "delayed",
+      "controlDef": {
+        "startDelayMs": 3000
+      },
+      "input": {
+        "source": "delayed!!!"
+      }
+    }
+  ]
+}
