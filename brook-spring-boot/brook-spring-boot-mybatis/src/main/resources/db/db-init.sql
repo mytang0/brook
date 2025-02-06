@@ -54,7 +54,7 @@ CREATE TABLE `task`
     `task_id`         varchar(64) COLLATE utf8mb4_bin  NOT NULL COMMENT '任务实例ID',
     `task_name`       varchar(255) COLLATE utf8mb4_bin NOT NULL COMMENT '任务名称',
     `flow_id`         varchar(64) COLLATE utf8mb4_bin  NOT NULL COMMENT '流程实例ID',
-    `json_def`       text COLLATE utf8mb4_bin COMMENT '任务定义',
+    `json_def`        text COLLATE utf8mb4_bin COMMENT '任务定义',
     `json_data`       text COLLATE utf8mb4_bin COMMENT '任务实例内容',
     `is_delete`       tinyint(1) NOT NULL DEFAULT '0' COMMENT '是否删除 0：否；1：是',
     `r_add_time`      datetime                         NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
