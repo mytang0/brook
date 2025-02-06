@@ -1,7 +1,8 @@
 package xyz.mytang0.brook.common.metadata.model;
 
-import xyz.mytang0.brook.common.metadata.enums.TaskStatus;
 import lombok.Data;
+import xyz.mytang0.brook.common.metadata.enums.TaskStatus;
+import xyz.mytang0.brook.common.metadata.extension.Extension;
 
 import javax.annotation.Nonnull;
 import javax.validation.constraints.NotBlank;
@@ -28,4 +29,6 @@ public class TaskResult implements Serializable {
     private Object output;
 
     private Integer progress;
+
+    private Extension extension;
 }

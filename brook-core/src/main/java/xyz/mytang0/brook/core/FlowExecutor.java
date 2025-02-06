@@ -279,6 +279,10 @@ public class FlowExecutor<T extends FlowTask> {
             fillDef(flowInstance);
             FlowContext.setCurrentFlow(flowInstance);
             executeUnsafe(flowInstance);
+            // Avoid multiple updates within 'executeUnsafe'.
+            if (!flowInstance.getStatus().isTerminal()) {
+                updateFlow(flowInstance);
+            }
         } catch (Throwable throwable) {
             exceptionHandler(flowInstance, throwable);
             // After handling the exception, execute again.
@@ -295,15 +299,8 @@ public class FlowExecutor<T extends FlowTask> {
         try {
             isNeedUpdate = executeUnsafe(taskInstance);
         } catch (TerminateException throwable) {
-            FlowStatus flowStatus = throwable.getFlowStatus();
-            if (flowStatus != null) {
-                taskInstance.setStatus(convertStatus(flowStatus));
-            } else {
-                taskInstance.setStatus(TaskStatus.FAILED);
-            }
-            taskInstance.setReasonForNotCompleting(
-                    throwable.getLocalizedMessage());
-            isNeedUpdate = true;
+            terminate(taskInstance.getFlowId(), throwable);
+            isNeedUpdate = false;
         } catch (Throwable throwable) {
             taskInstance.setStatus(TaskStatus.FAILED);
             taskInstance.setReasonForNotCompleting("Execute exception: "
@@ -319,6 +316,7 @@ public class FlowExecutor<T extends FlowTask> {
             );
             taskResult.setOutput(taskInstance.getOutput());
             taskResult.setProgress(taskInstance.getProgress());
+            taskResult.setExtension(taskInstance.getExtension());
             taskResult.setReasonForNotCompleting(
                     taskInstance.getReasonForNotCompleting());
 
@@ -370,6 +368,30 @@ public class FlowExecutor<T extends FlowTask> {
 
         if (CollectionUtils.isNotEmpty(tasksToBeUpdated)) {
             executeUnsafe(flowInstance);
+        }
+    }
+
+    private void terminate(String flowId, TerminateException throwable) {
+        // Try to wait for a safe point for 30 seconds, otherwise forces terminate.
+        boolean locked = flowLockFacade.acquireLock(flowId, LOCK_TRY_TIME_MS);
+        if (!locked) {
+            log.warn("Safe point not reached, force terminate flow: {}.", flowId);
+        }
+
+        try {
+            Optional.ofNullable(getExecutionDAO().getFlow(flowId))
+                    .ifPresent(flowInstance -> {
+                                if (!flowInstance.getStatus().isTerminal()) {
+                                    fillDef(flowInstance);
+                                    terminateExceptionHandler(flowInstance, throwable);
+                                    executePerfectlyUnsafe(flowInstance);
+                                }
+                            }
+                    );
+        } finally {
+            if (locked) {
+                flowLockFacade.releaseLock(flowId);
+            }
         }
     }
 
@@ -813,9 +835,11 @@ public class FlowExecutor<T extends FlowTask> {
             }
 
             if (toBeScheduled != null) {
-                getMappedTasks(flowInstance, toBeScheduled).forEach(taskInstance ->
-                        tasksToBeScheduled.put(taskInstance.getTaskName(), taskInstance)
-                );
+                getMappedTasks(flowInstance, toBeScheduled)
+                        .forEach(taskInstance ->
+                                tasksToBeScheduled.put(
+                                        taskInstance.getTaskName(), taskInstance)
+                        );
             }
 
         } else {
@@ -1834,7 +1858,12 @@ public class FlowExecutor<T extends FlowTask> {
         taskInstance.setReasonForNotCompleting(taskResult.getReasonForNotCompleting());
         taskInstance.setEndTime(TimeUtils.currentTimeMillis());
 
-        updateTask(taskInstance);
+        try {
+            FlowContext.setCurrentFlow(flowInstance);
+            updateTask(taskInstance);
+        } finally {
+            FlowContext.removeCurrentFlow();
+        }
 
         executePerfectlyUnsafe(flowInstance);
     }

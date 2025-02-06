@@ -23,6 +23,7 @@ import xyz.mytang0.brook.core.utils.ParameterUtils;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -37,6 +38,11 @@ public class IFTask implements FlowTask {
             .classType(PROPERTIES_MAP_CLASS)
             .noDefaultValue()
             .withDescription("Title.");
+
+    // Output keys.
+    static final String HIT_INDEX_KEY = "hitIndex";
+
+    static final String INNER_LAST_TASK = "innerLastTask";
 
     private final EngineActuator engineActuator;
 
@@ -115,9 +121,9 @@ public class IFTask implements FlowTask {
 
         if (CollectionUtils.isNotEmpty(hitTaskDefs)) {
             TaskDef scheduled = hitTaskDefs.get(0);
-            IFOutput ifOutput = new IFOutput();
-            ifOutput.setHitIndex(hitIndex);
-            ifOutput.setInnerLastTask(scheduled.getName());
+            Map<String, Object> ifOutput = new HashMap<>();
+            ifOutput.put(HIT_INDEX_KEY, hitIndex);
+            ifOutput.put(INNER_LAST_TASK, scheduled.getName());
             ifTask.setOutput(ifOutput);
 
             scheduledTasks.addAll(
@@ -163,14 +169,17 @@ public class IFTask implements FlowTask {
 
                 if (mappingTask.getOutput() != null) {
 
-                    IFOutput ifOutput = mappingTask.getOutput();
+                    Map<String, Object> output
+                            = mappingTask.getOutput();
 
-                    Branch mappingBranch = branches.get(ifOutput.getHitIndex());
+                    int hitIndex = (int) output.get(HIT_INDEX_KEY);
+
+                    Branch mappingBranch = branches.get(hitIndex);
 
                     TaskDef nextTask = findNextTaskFromChildren(mappingBranch.getCases(), target);
 
                     if (nextTask != null) {
-                        ifOutput.setInnerLastTask(nextTask.getName());
+                        output.put(INNER_LAST_TASK, nextTask.getName());
                     }
 
                     return nextTask;
@@ -245,16 +254,6 @@ public class IFTask implements FlowTask {
         }
 
         return null;
-    }
-
-    @Data
-    static class IFOutput implements Serializable {
-
-        private static final long serialVersionUID = -4008155033303592662L;
-
-        private int hitIndex;
-
-        private String innerLastTask;
     }
 
     static class Options {

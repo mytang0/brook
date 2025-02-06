@@ -174,6 +174,13 @@ public class TaskInstance implements Serializable {
                 .orElse(defaultValue);
     }
 
+    public void mergeExtension(Extension pending) {
+        if (pending != null && !pending.isEmpty()) {
+            initExtension();
+            extension.putAll(pending);
+        }
+    }
+
     public void setExtension(String key, String value) {
         initExtension();
         extension.put(key, value);
