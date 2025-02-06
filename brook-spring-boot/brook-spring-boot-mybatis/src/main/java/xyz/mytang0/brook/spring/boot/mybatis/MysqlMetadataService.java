@@ -1,17 +1,18 @@
 package xyz.mytang0.brook.spring.boot.mybatis;
 
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.stereotype.Component;
+import xyz.mytang0.brook.common.constants.Delimiter;
 import xyz.mytang0.brook.common.metadata.definition.FlowDef;
 import xyz.mytang0.brook.common.utils.JsonUtils;
 import xyz.mytang0.brook.spi.annotation.FlowSelectedSPI;
 import xyz.mytang0.brook.spi.metadata.MetadataService;
 import xyz.mytang0.brook.spring.boot.mybatis.entity.FlowDefinition;
 import xyz.mytang0.brook.spring.boot.mybatis.mapper.FlowDefMapper;
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
-import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.LoadingCache;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.stereotype.Component;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -23,7 +24,7 @@ import java.util.concurrent.TimeUnit;
 @ConditionalOnProperty(name = "brook.metadata.mysql.enabled", havingValue = "true")
 public class MysqlMetadataService implements MetadataService {
 
-    private final LoadingCache<String, Optional<FlowDef>> flowDefCache;
+    private final Cache<String, Optional<FlowDef>> flowDefCache;
 
     private final FlowDefMapper flowDefMapper;
 
@@ -33,7 +34,7 @@ public class MysqlMetadataService implements MetadataService {
                 .newBuilder()
                 .maximumSize(512)
                 .expireAfterWrite(5, TimeUnit.MINUTES)
-                .build(this::getFlowOptional);
+                .build();
     }
 
     @Override
@@ -63,22 +64,54 @@ public class MysqlMetadataService implements MetadataService {
 
     @Override
     public void deleteFlow(String name) {
+        deleteFlow(name, null);
+    }
+
+    @Override
+    public void deleteFlow(String name, Integer version) {
         flowDefMapper.delete(Wrappers
                 .lambdaQuery(FlowDefinition.class)
                 .eq(FlowDefinition::getName, name)
+                .eq(Objects.nonNull(version),
+                        FlowDefinition::getVersion,
+                        version)
         );
     }
 
     @Override
     public FlowDef getFlow(String name) {
-        return Objects.requireNonNull(flowDefCache.get(name)).orElse(null);
+        return getFlow(name, null);
     }
 
-    private Optional<FlowDef> getFlowOptional(String name) {
-        FlowDefinition store =
-                flowDefMapper.selectOne(Wrappers
-                        .lambdaQuery(FlowDefinition.class)
-                        .eq(FlowDefinition::getName, name));
+    @Override
+    public FlowDef getFlow(String name, Integer version) {
+        String cacheKey =
+                version != null
+                        ? name + Delimiter.AT + version
+                        : name;
+        return Objects.requireNonNull(
+                        flowDefCache.get(cacheKey,
+                                __ -> getFlowOptional(name, version))
+                )
+                .orElse(null);
+    }
+
+    private Optional<FlowDef> getFlowOptional(String name, Integer version) {
+
+        FlowDefinition store;
+
+        if (version != null) {
+            store = flowDefMapper.selectOne(Wrappers
+                    .lambdaQuery(FlowDefinition.class)
+                    .eq(FlowDefinition::getName, name)
+                    .eq(FlowDefinition::getVersion, version));
+        } else {
+            store = flowDefMapper.selectOne(Wrappers
+                    .lambdaQuery(FlowDefinition.class)
+                    .eq(FlowDefinition::getName, name)
+                    .orderByDesc(FlowDefinition::getId)
+                    .last("LIMIT 1"));
+        }
 
         if (store != null) {
             return Optional.of(JsonUtils.readValue(store.getJsonData(), FlowDef.class));
