@@ -31,6 +31,8 @@ import xyz.mytang0.brook.core.aspect.TaskAspect;
 import xyz.mytang0.brook.core.exception.FlowException;
 import xyz.mytang0.brook.core.exception.TerminateException;
 import xyz.mytang0.brook.core.execution.ExecutionProperties;
+import xyz.mytang0.brook.core.limiter.RateLimiterFactory;
+import xyz.mytang0.brook.core.limiter.RateLimiterProperties;
 import xyz.mytang0.brook.core.lock.FlowLockFacade;
 import xyz.mytang0.brook.core.lock.LockProperties;
 import xyz.mytang0.brook.core.metadata.MetadataFacade;
@@ -44,6 +46,7 @@ import xyz.mytang0.brook.spi.computing.EngineActuator;
 import xyz.mytang0.brook.spi.config.ConfiguratorFacade;
 import xyz.mytang0.brook.spi.execution.ExecutionDAO;
 import xyz.mytang0.brook.spi.executor.ExecutorFactory;
+import xyz.mytang0.brook.spi.limiter.RateLimiter;
 import xyz.mytang0.brook.spi.metadata.MetadataService;
 import xyz.mytang0.brook.spi.queue.QueueService;
 import xyz.mytang0.brook.spi.task.FlowTask;
@@ -114,6 +117,8 @@ public class FlowExecutor<T extends FlowTask> {
 
     private final DelayedTaskMonitorProperties delayedTaskMonitorProperties;
 
+    private final RateLimiterFactory rateLimiterFactory;
+
 
     public FlowExecutor(FlowTaskRegistry<T> flowTaskRegistry) {
         this.flowLockFacade = new FlowLockFacade(
@@ -147,6 +152,10 @@ public class FlowExecutor<T extends FlowTask> {
                 ConfiguratorFacade.getConfig(DelayedTaskMonitorProperties.class);
 
         DelayedTaskMonitor.init(this, flowLockFacade, delayedTaskMonitorProperties);
+
+        RateLimiterProperties rateLimiterProperties
+                = ConfiguratorFacade.getConfig(RateLimiterProperties.class);
+        this.rateLimiterFactory = new RateLimiterFactory(rateLimiterProperties);
     }
 
     public String startFlow(StartFlowReq startFlowReq) {
@@ -2098,13 +2107,12 @@ public class FlowExecutor<T extends FlowTask> {
             FlowDef.ControlDef controlDef = flowDef.getControlDef();
             Integer concurrencyLimit = controlDef.getConcurrencyLimit();
             if (concurrencyLimit != null && 0 < concurrencyLimit) {
-                List<String> runningFlowIds =
-                        getExecutionDAO().getRunningFlowIds(flowDef.getName());
-                if (CollectionUtils.isNotEmpty(runningFlowIds)
-                        && concurrencyLimit < runningFlowIds.size()) {
+                final RateLimiter rateLimiter =
+                        rateLimiterFactory.getRateLimiter(flowDef);
+                if (!rateLimiter.tryAcquire()) {
                     throw new FlowException(CONCURRENCY_LIMIT,
-                            String.format("Trigger concurrency limit, limit: %d current: %d",
-                                    concurrencyLimit, runningFlowIds.size()));
+                            String.format("Trigger concurrency limit, limit: %d",
+                                    concurrencyLimit));
                 }
             }
         }
@@ -2116,15 +2124,12 @@ public class FlowExecutor<T extends FlowTask> {
             TaskDef.ControlDef controlDef = taskDef.getControlDef();
             Integer concurrencyLimit = controlDef.getConcurrencyLimit();
             if (concurrencyLimit != null && 0 < concurrencyLimit) {
-                List<String> runningTaskIds =
-                        getExecutionDAO().getRunningTaskIds(taskDef.getName());
-                if (CollectionUtils.isNotEmpty(runningTaskIds)
-                        && concurrencyLimit < runningTaskIds.size()
-                        && !runningTaskIds.contains(taskInstance.getTaskId())) {
-                    log.warn("Task: {} trigger concurrency limit, limit: {} current: {}",
+                final RateLimiter rateLimiter =
+                        rateLimiterFactory.getRateLimiter(taskDef);
+                if (!rateLimiter.tryAcquire()) {
+                    log.warn("Task: {} trigger concurrency limit, limit: {}",
                             taskInstance.getTaskId(),
-                            concurrencyLimit,
-                            runningTaskIds.size());
+                            concurrencyLimit);
                     return true;
                 }
             }
