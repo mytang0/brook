@@ -20,11 +20,6 @@
 
     <dependencies>
         <dependency>
-            <groupId>xyz.mytang0.brook</groupId>
-            <artifactId>brook-spi</artifactId>
-        </dependency>
-
-        <dependency>
             <groupId>com.github.ben-manes.caffeine</groupId>
             <artifactId>caffeine</artifactId>
         </dependency>

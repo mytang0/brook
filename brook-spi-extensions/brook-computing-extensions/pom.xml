@@ -15,5 +15,6 @@
     <description>The computing extensions module of brook project.</description>
 
     <modules>
+        <module>brook-computing-javascript</module>
     </modules>
 </project>

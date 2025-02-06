@@ -67,7 +67,6 @@ import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 import static java.util.Objects.requireNonNull;
-import static xyz.mytang0.brook.core.constants.FlowConstants.DEFAULT_ENGINE_TYPE;
 import static xyz.mytang0.brook.core.constants.FlowConstants.DEFAULT_TIMEOUT_MS;
 import static xyz.mytang0.brook.core.constants.FlowConstants.LOCK_TRY_TIME_MS;
 import static xyz.mytang0.brook.core.exception.FlowErrorCode.CONCURRENCY_LIMIT;
@@ -1125,8 +1124,7 @@ public class FlowExecutor<T extends FlowTask> {
                                 BooleanUtils.toBoolean(
                                         String.valueOf(
                                                 engineActuator.compute(
-                                                        Optional.ofNullable(skipDef.getEngineType())
-                                                                .orElse(DEFAULT_ENGINE_TYPE),
+                                                        skipDef.getEngineType(),
                                                         skipDef.getSkipCondition(),
                                                         flowContext(flowInstance))
                                         )
@@ -1450,8 +1448,7 @@ public class FlowExecutor<T extends FlowTask> {
             boolean isSuccess = BooleanUtils.toBoolean(
                     String.valueOf(
                             engineActuator.compute(
-                                    Optional.ofNullable(checkDef.getEngineType())
-                                            .orElse(DEFAULT_ENGINE_TYPE),
+                                    checkDef.getEngineType(),
                                     successDef.getSuccessCondition(),
                                     taskInstance.getOutput())
                     )
@@ -1460,8 +1457,7 @@ public class FlowExecutor<T extends FlowTask> {
             if (!isSuccess && StringUtils.isNotBlank(successDef.getFailureReasonExpression())) {
                 taskInstance.setReasonForNotCompleting(JsonUtils.toJsonString(
                                 engineActuator.compute(
-                                        Optional.ofNullable(checkDef.getEngineType())
-                                                .orElse(DEFAULT_ENGINE_TYPE),
+                                        checkDef.getEngineType(),
                                         successDef.getFailureReasonExpression(),
                                         taskInstance.getOutput())
                         )
@@ -1486,8 +1482,7 @@ public class FlowExecutor<T extends FlowTask> {
             return BooleanUtils.toBoolean(
                     String.valueOf(
                             engineActuator.compute(
-                                    Optional.ofNullable(checkDef.getEngineType())
-                                            .orElse(DEFAULT_ENGINE_TYPE),
+                                    checkDef.getEngineType(),
                                     retryDef.getRetryCondition(),
                                     taskInstance.getOutput())
                     )

@@ -5,7 +5,7 @@ import xyz.mytang0.brook.spi.oss.OSSStorage;
 
 import javax.validation.constraints.NotBlank;
 
-@SPI
+@SPI(value = "javascript")
 public interface Engine {
 
     @NotBlank String type();
