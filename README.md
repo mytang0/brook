@@ -8,7 +8,7 @@ In order to maximize the lightweight nature of the Brook engine, a deliberate se
 
 ### Maven dependency
 
-Specify the version appropriate for the project, see [releases](https://github.com/mytang0/brook/releases).
+Specify the version appropriate for the project, see [Maven Central Repository](https://central.sonatype.com/search?q=g:xyz.mytang0.brook).
 ```xml
 <properties>
     <brook.version>...</brook.version>
