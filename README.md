@@ -21,7 +21,7 @@ Specify the version appropriate for the project, see [Maven Central Repository](
 <dependencies>
     <dependency>
         <groupId>xyz.mytang0.brook</groupId>
-        <artifactId>>brook-engine</artifactId>
+        <artifactId>brook-engine</artifactId>
         <version>${brook.version}</version>
     </dependency>
 </dependencies>
@@ -33,7 +33,7 @@ Specify the version appropriate for the project, see [Maven Central Repository](
 <dependencies>
     <dependency>
         <groupId>xyz.mytang0.brook</groupId>
-        <artifactId>>brook-spring-boot-starter</artifactId>
+        <artifactId>brook-spring-boot-starter</artifactId>
         <version>${brook.version}</version>
     </dependency>
 </dependencies>
