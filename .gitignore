@@ -176,3 +176,4 @@ logs/
 
 **/.flattened-pom.xml
 ~
+.publishing-maven-central-helper.txt
