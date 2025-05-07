@@ -17,6 +17,7 @@ import java.lang.reflect.Modifier;
 import java.net.URL;
 import java.util.Collections;
 import java.util.Enumeration;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -195,11 +196,14 @@ public class ExtensionLoader<T> {
     public T createSelectedExtension(Map<String, Class<?>> classMap) {
         T instance = null;
         for (Class<?> aClass : classMap.values()) {
-            if (aClass.isAnnotationPresent(Selected.class)) {
+            if (isSelected(aClass)) {
                 instance = (T) extensionInstances.get(aClass);
                 if (Objects.isNull(instance)) {
                     try {
                         instance = newInstance(aClass);
+                        if (Objects.nonNull(instance)) {
+                            break;
+                        }
                     } catch (InstantiationException | IllegalAccessException e) {
                         throw new IllegalStateException("Extension instance(class: "
                                 + aClass + ")  could not be instantiated: " + e.getMessage(), e);
@@ -209,7 +213,6 @@ public class ExtensionLoader<T> {
         }
         return instance;
     }
-
 
     /**
      * get all spi class spi.
@@ -309,20 +312,31 @@ public class ExtensionLoader<T> {
         holder.set(instance);
     }
 
-    private boolean isSelected(Class<?> clazz) {
-        boolean selected = clazz.isAnnotationPresent(Selected.class);
-        if (!selected) {
-            Annotation[] annotations = clazz.getAnnotations();
-            for (Annotation annotation : annotations) {
-                Annotation[] parentAnnotations = annotation.annotationType().getAnnotations();
-                for (Annotation parentAnnotation : parentAnnotations) {
-                    if (parentAnnotation instanceof Selected) {
-                        return true;
-                    }
-                }
+    private boolean isSelected(final Class<?> clazz) {
+        Set<Class<?>> visited = new HashSet<>();
+        for (Annotation annotation : clazz.getAnnotations()) {
+            if (isAnnotationOrMetaAnnotation(annotation.annotationType(), Selected.class, visited)) {
+                return true;
             }
         }
-        return selected;
+        return false;
+    }
+
+    private boolean isAnnotationOrMetaAnnotation(final Class<? extends Annotation> annotationType,
+                                                 final Class<? extends Annotation> targetAnnotation,
+                                                 final Set<Class<?>> visited) {
+        if (annotationType.equals(targetAnnotation)) {
+            return true;
+        }
+        if (!visited.add(annotationType)) {
+            return false;
+        }
+        for (Annotation meta : annotationType.getAnnotations()) {
+            if (isAnnotationOrMetaAnnotation(meta.annotationType(), targetAnnotation, visited)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private Map<String, Class<?>> loadExtensionClass() {
@@ -398,7 +412,7 @@ public class ExtensionLoader<T> {
     /**
      * inject
      */
-    private T injectExtension(T instance) {
+    private void injectExtension(T instance) {
         try {
             for (Method method : instance.getClass().getMethods()) {
                 if (!isSetter(method)) {
@@ -425,7 +439,6 @@ public class ExtensionLoader<T> {
         } catch (Exception e) {
             LOG.error(e.getMessage(), e);
         }
-        return instance;
     }
 
     @SuppressWarnings("unchecked")
