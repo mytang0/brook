@@ -4,7 +4,7 @@ Brook is an orchestration engine, supports microservices and in-app logic (embed
 
 ## Getting started
 
-In order to maximize the lightweight nature of the Brook engine, a deliberate separation is made between its core components (which depend solely on a few essential toolkits) and the middleware extensions using SPI (Service Provider Interface). Consequently, regardless of the application implementation framework, one can seamlessly rely on the engine JAR and initialize the relevant instances.
+To maximize the lightweight nature of the Brook engine, a deliberate separation is made between its core components (which depend solely on a few essential toolkits) and the middleware extensions using SPI (Service Provider Interface). Consequently, regardless of the application implementation framework, one can seamlessly rely on the engine JAR and initialize the relevant instances.
 
 ### Maven dependency
 
