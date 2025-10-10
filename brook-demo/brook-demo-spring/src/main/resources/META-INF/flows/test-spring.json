@@ -1,0 +1,31 @@
+{
+  "name": "test-spring",
+  "description": "for unit testing",
+  "taskDefs": [
+    {
+      "type": "springBeanMethod",
+      "name": "firstCall",
+      "input": {
+        "beanName": "demoService",
+        "methodName": "hello",
+        "args": [
+          "${flow.input}"
+        ]
+      }
+    },
+    {
+      "type": "springBeanMethod",
+      "name": "secondCall",
+      "input": {
+        "beanName": "demoService",
+        "methodName": "hello",
+        "types": [
+          "java.lang.String"
+        ],
+        "args": [
+          "${firstCall.output}"
+        ]
+      }
+    }
+  ]
+}
