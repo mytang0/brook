@@ -37,4 +37,13 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
+
+    <profiles>
+        <profile>
+            <id>spring-boot-2.7</id>
+            <properties>
+                <spring-boot.version>2.7.18</spring-boot.version>
+            </properties>
+        </profile>
+    </profiles>
 </project>
