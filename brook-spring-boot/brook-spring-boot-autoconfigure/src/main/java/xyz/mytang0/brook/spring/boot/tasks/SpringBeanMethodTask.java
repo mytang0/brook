@@ -112,20 +112,20 @@ public class SpringBeanMethodTask implements FlowTask {
                 .key("beanName")
                 .stringType()
                 .noDefaultValue()
-                .withDescription("Task input parameters, if the task has no input parameters, then pass in '[]'.");
+                .withDescription("The Spring Bean name.");
 
         static final ConfigOption<String> METHOD_NAME = ConfigOptions
                 .key("methodName")
                 .stringType()
                 .noDefaultValue()
-                .withDescription("Task input parameters, if the task has no input parameters, then pass in '[]'.");
+                .withDescription("The Spring Bean method name.");
 
         static final ConfigOption<List<Object>> ARGS = ConfigOptions
                 .key("args")
                 .classType(Object.class)
                 .asList()
                 .noDefaultValue()
-                .withDescription("The spring bean method input parameters, " +
+                .withDescription("The Spring Bean method input parameters, " +
                         "if the task has no input parameters, then pass in '[]'.");
     }
 }
