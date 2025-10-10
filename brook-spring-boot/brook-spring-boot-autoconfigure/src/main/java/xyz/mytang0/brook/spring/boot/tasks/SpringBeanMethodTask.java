@@ -1,6 +1,8 @@
 package xyz.mytang0.brook.spring.boot.tasks;
 
 
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import xyz.mytang0.brook.common.configuration.ConfigOption;
 import xyz.mytang0.brook.common.configuration.ConfigOptions;
 import xyz.mytang0.brook.common.configuration.Configuration;
@@ -11,8 +13,6 @@ import xyz.mytang0.brook.common.utils.MethodUtils;
 import xyz.mytang0.brook.core.exception.TerminateException;
 import xyz.mytang0.brook.spi.task.FlowTask;
 import xyz.mytang0.brook.spring.boot.utils.SpringContextUtils;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 
 import java.lang.reflect.Method;
 import java.util.HashSet;
@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 public class SpringBeanMethodTask implements FlowTask {
@@ -45,17 +46,19 @@ public class SpringBeanMethodTask implements FlowTask {
     }
 
     @Override
+    public Set<ConfigOption<?>> optionalOptions() {
+        Set<ConfigOption<?>> optional = new HashSet<>();
+        optional.add(Options.TYPES);
+        return optional;
+    }
+
+    @Override
     public boolean execute(TaskInstance taskInstance) {
 
         Configuration taskDefInput = taskInstance.getInputConfiguration();
 
         String beanName = taskDefInput.getString(Options.BEAN_NAME);
         String methodName = taskDefInput.getString(Options.METHOD_NAME);
-
-        Object[] inputArgs = taskDefInput
-                .getOptional(Options.ARGS)
-                .map(values -> values.toArray(new Object[0]))
-                .orElse(null);
 
         Object beanInstance;
 
@@ -66,11 +69,32 @@ public class SpringBeanMethodTask implements FlowTask {
                     String.format("the %s bean does not exist", beanName));
         }
 
-        Method method = MethodUtils.getAccessibleMethod(beanInstance.getClass(), methodName);
+        Class<?>[] types = taskDefInput.getOptional(Options.TYPES)
+                .map(values ->
+                        values.stream().map(type -> {
+                                    try {
+                                        return Class.forName(type);
+                                    } catch (ClassNotFoundException e) {
+                                        throw new IllegalArgumentException(
+                                                String.format("Parameter type [%s] does not exist", type));
+                                    }
+                                })
+                                .collect(Collectors.toList())
+                                .toArray(new Class<?>[0])
+                )
+                .orElse(null);
+
+        Method method = types != null
+                ? MethodUtils.getAccessibleMethod(beanInstance.getClass(), methodName, types)
+                : MethodUtils.getAccessibleMethod(beanInstance.getClass(), methodName);
         if (method == null) {
             throw new IllegalArgumentException(
                     String.format("Method %s does not exist in %s bean", methodName, beanName));
         }
+
+        Object[] inputArgs = taskDefInput.getOptional(Options.ARGS)
+                .map(values -> values.toArray(new Object[0]))
+                .orElse(null);
 
         if (inputArgs == null ||
                 method.getParameterCount() != inputArgs.length) {
@@ -112,20 +136,28 @@ public class SpringBeanMethodTask implements FlowTask {
                 .key("beanName")
                 .stringType()
                 .noDefaultValue()
-                .withDescription("Task input parameters, if the task has no input parameters, then pass in '[]'.");
+                .withDescription("The Spring Bean name.");
 
         static final ConfigOption<String> METHOD_NAME = ConfigOptions
                 .key("methodName")
                 .stringType()
                 .noDefaultValue()
-                .withDescription("Task input parameters, if the task has no input parameters, then pass in '[]'.");
+                .withDescription("The Spring Bean method name.");
+
+        static final ConfigOption<List<String>> TYPES = ConfigOptions
+                .key("types")
+                .classType(String.class)
+                .asList()
+                .defaultValues()
+                .withDescription("The Spring Bean method  parameter types, " +
+                        "When a method with the same name exists in the Bean, the parameter type must be specified.");
 
         static final ConfigOption<List<Object>> ARGS = ConfigOptions
                 .key("args")
                 .classType(Object.class)
                 .asList()
                 .noDefaultValue()
-                .withDescription("The spring bean method input parameters, " +
+                .withDescription("The Spring Bean method input parameters, " +
                         "if the task has no input parameters, then pass in '[]'.");
     }
 }
