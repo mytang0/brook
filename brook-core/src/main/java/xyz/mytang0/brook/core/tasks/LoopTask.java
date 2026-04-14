@@ -28,7 +28,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -76,10 +75,11 @@ public class LoopTask implements FlowTask {
     // distinguish real TaskDef Maps from arbitrary user payload Maps.
     // A Map must have "name" + "type" AND at least one of these keys to be
     // considered a TaskDef for per-iteration renaming.
-    private static final Set<String> TASK_DEF_INDICATOR_KEYS = new HashSet<>(Arrays.asList(
-            "input", "controlDef", "progressDef", "logDef", "linkDef",
-            "checkDef", "hangDef", "callback", "extension", "template"
-    ));
+    private static final Set<String> TASK_DEF_INDICATOR_KEYS =
+            new HashSet<>(Arrays.asList(
+                    "input", "controlDef", "progressDef", "logDef", "linkDef",
+                    "checkDef", "hangDef", "callback", "extension", "template"
+            ));
 
     private final EngineActuator engineActuator;
 
@@ -145,16 +145,16 @@ public class LoopTask implements FlowTask {
             // passing it through the engine would break (e.g., "[a, b]" is not a valid expression).
             Object evaluated;
             if (loopOverRaw instanceof String) {
-                evaluated = Optional.ofNullable(taskDefInput.getString(Options.ENGINE_TYPE))
-                        .filter(StringUtils::isNotBlank)
-                        .map(engineType ->
-                                engineActuator.compute(
-                                        engineType,
-                                        (String) loopOverRaw,
-                                        flowContext(context.getFlowInstance())
-                                )
-                        )
-                        .orElse(loopOverRaw);
+                String engineType = taskDefInput.getString(Options.ENGINE_TYPE);
+                if (StringUtils.isNotBlank(engineType)) {
+                    evaluated = engineActuator.compute(
+                            engineType,
+                            (String) loopOverRaw,
+                            flowContext(context.getFlowInstance())
+                    );
+                } else {
+                    evaluated = loopOverRaw;
+                }
             } else {
                 evaluated = loopOverRaw;
             }
@@ -208,7 +208,7 @@ public class LoopTask implements FlowTask {
             inputMap.put(Options.LOOP_OVER.key(), loopOverValue);
         }
 
-        Map<String, Object> loopOutput = new HashMap<>();
+        Map<String, Object> loopOutput = new HashMap<>(4);
         loopOutput.put(ITERATIONS_KEY, iterations);
         loopOutput.put(CURRENT_INDEX_KEY, 0);
         if (loopOverValue != null && !loopOverValue.isEmpty()) {
@@ -289,15 +289,10 @@ public class LoopTask implements FlowTask {
             // Create iteration-specific copies of loopBody with __LOOP_<index> suffixed names,
             // so that flowExecutor.getNextTask() can match against the target (which was
             // also scheduled with suffixed names).
-            List<TaskDef> iterationBody = new ArrayList<>();
-            for (TaskDef bodyTask : loopBody) {
-                iterationBody.add(createIterationTaskDef(bodyTask, effectiveIndex));
-            }
-
             // Traverse using flowExecutor.getNextTask() (like IFTask/SwitchTask do)
             // so that nested control-flow tasks (IF/SWITCH/SUB_FLOW) within the loop body
             // are properly traversed instead of relying on top-level name matching.
-            nextTask = findNextTaskFromChildren(iterationBody, target);
+            nextTask = findNextTaskFromChildren(loopBody, target, effectiveIndex);
 
             if (nextTask == TaskDef.MATCHED) {
                 // All tasks in current iteration completed, advance to next.
@@ -318,6 +313,7 @@ public class LoopTask implements FlowTask {
 
         return nextTask;
     }
+
     /**
      * Traverses loop body children using flowExecutor.getNextTask() to properly
      * support nested control-flow tasks (IF/SWITCH/SUB_FLOW). When getNextTask()
@@ -325,16 +321,19 @@ public class LoopTask implements FlowTask {
      * no more siblings exist). This follows the same pattern as IFTask/SwitchTask.
      */
     @SuppressWarnings("all")
-    private TaskDef findNextTaskFromChildren(final List<TaskDef> children,
-                                             final TaskDef target) {
-        Iterator<TaskDef> iterator = children.iterator();
+    private TaskDef findNextTaskFromChildren(
+            final List<TaskDef> loopBody,
+            final TaskDef target,
+            final int iterationIndex) {
 
-        while (iterator.hasNext()) {
-            TaskDef nextTask =
-                    flowExecutor.getNextTask(iterator.next(), target);
+        for (int i = 0; i < loopBody.size(); i++) {
+            TaskDef nextTask = flowExecutor.getNextTask(
+                    createIterationTaskDef(loopBody.get(i), iterationIndex),
+                    target
+            );
             if (nextTask == TaskDef.MATCHED) {
-                return iterator.hasNext()
-                        ? iterator.next()
+                return (i + 1) < loopBody.size()
+                        ? createIterationTaskDef(loopBody.get(i + 1), iterationIndex)
                         : TaskDef.MATCHED;
             } else if (nextTask != null) {
                 return nextTask;
@@ -354,15 +353,53 @@ public class LoopTask implements FlowTask {
      */
     private TaskDef createIterationTaskDef(TaskDef original, int iterationIndex) {
         String suffix = LOOP_INDEX_SEPARATOR + iterationIndex;
-        TaskDef copy = JsonUtils.readValue(
-                JsonUtils.toJsonString(original), TaskDef.class);
+
+        TaskDef copy = new TaskDef();
+        copy.setType(original.getType());
         copy.setName(original.getName() + suffix);
+        copy.setDisplay(original.getDisplay());
+        copy.setDescription(original.getDescription());
+        copy.setControlDef(original.getControlDef());
+        copy.setProgressDef(original.getProgressDef());
+        copy.setLogDef(original.getLogDef());
+        copy.setLinkDef(original.getLinkDef());
+        copy.setCheckDef(original.getCheckDef());
+        copy.setHangDef(original.getHangDef());
+        copy.setCallback(original.getCallback());
+        copy.setExtension(original.getExtension());
+        copy.setTemplate(original.getTemplate());
+
+        Object copiedInput = deepCopyInputObject(original.getInput());
+        copy.setInput(copiedInput);
+        copy.setOutput(original.getOutput());
+
         // Recursively rename any nested TaskDefs embedded in the input
         // (e.g., IF trueBranch/falseBranch, SWITCH cases, nested LOOP body).
-        if (copy.getInput() != null) {
-            renameNestedTaskDefs(copy.getInput(), suffix);
+        if (copiedInput != null) {
+            renameNestedTaskDefs(copiedInput, suffix);
         }
         return copy;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Object deepCopyInputObject(Object input) {
+        if (input instanceof Map) {
+            Map<String, Object> original = (Map<String, Object>) input;
+            Map<String, Object> copied = new HashMap<>(original.size());
+            for (Map.Entry<String, Object> entry : original.entrySet()) {
+                copied.put(entry.getKey(), deepCopyInputObject(entry.getValue()));
+            }
+            return copied;
+        }
+        if (input instanceof List) {
+            List<?> original = (List<?>) input;
+            List<Object> copied = new ArrayList<>(original.size());
+            for (Object item : original) {
+                copied.add(deepCopyInputObject(item));
+            }
+            return copied;
+        }
+        return input;
     }
 
     /**
@@ -399,11 +436,16 @@ public class LoopTask implements FlowTask {
      * "controlDef"), to avoid false positives on arbitrary user data.
      */
     private static boolean isTaskDefMap(Map<String, Object> map) {
-        if (!(map.containsKey("name") && map.containsKey("type")
-                && map.get("name") instanceof String
-                && map.get("type") instanceof String)) {
+        Object name = map.get("name");
+        if (!(name instanceof String)) {
             return false;
         }
+
+        Object type = map.get("type");
+        if (!(type instanceof String)) {
+            return false;
+        }
+
         for (String key : TASK_DEF_INDICATOR_KEYS) {
             if (map.containsKey(key)) {
                 return true;

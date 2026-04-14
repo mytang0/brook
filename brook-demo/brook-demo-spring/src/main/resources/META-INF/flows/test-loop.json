@@ -12,11 +12,17 @@
             "type": "COMPUTING",
             "name": "processItem",
             "input": {
-              "source": "${loopItems.output.currentItem}",
-              "index": "${loopItems.output.currentIndex}"
+              "source": "${loopItems.output.currentItem}"
             }
           }
         ]
+      }
+    },
+    {
+      "type": "COMPUTING",
+      "name": "compute",
+      "input": {
+        "source": "${loopItems.output.currentItem}"
       }
     }
   ]
