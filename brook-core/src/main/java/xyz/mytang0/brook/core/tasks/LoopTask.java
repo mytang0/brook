@@ -187,6 +187,16 @@ public class LoopTask implements FlowTask {
         loopTask.setFlowId(context.getFlowInstance().getFlowId());
         loopTask.setInput(context.getInput());
 
+        // Persist the normalized list into the task input so that
+        // updateCurrentItem() can reliably index into it on later iterations,
+        // even when the original loopOver was an engine expression or a
+        // non-List collection/array that was normalized above.
+        if (loopOverValue != null && loopTask.getInput() instanceof Map) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> inputMap = (Map<String, Object>) loopTask.getInput();
+            inputMap.put(Options.LOOP_OVER.key(), loopOverValue);
+        }
+
         Map<String, Object> loopOutput = new HashMap<>();
         loopOutput.put(ITERATIONS_KEY, iterations);
         loopOutput.put(CURRENT_INDEX_KEY, 0);
@@ -303,12 +313,44 @@ public class LoopTask implements FlowTask {
      * Creates a deep copy of a TaskDef with an iteration-specific name suffix.
      * This ensures each iteration's tasks have unique names, preventing
      * the executor's name-based deduplication from filtering them out.
+     * <p>
+     * Recursively renames all nested child TaskDefs (e.g., inside IF/SWITCH
+     * branches) to prevent name collisions across iterations.
      */
     private TaskDef createIterationTaskDef(TaskDef original, int iterationIndex) {
+        String suffix = LOOP_INDEX_SEPARATOR + iterationIndex;
         TaskDef copy = JsonUtils.readValue(
                 JsonUtils.toJsonString(original), TaskDef.class);
-        copy.setName(original.getName() + LOOP_INDEX_SEPARATOR + iterationIndex);
+        copy.setName(original.getName() + suffix);
+        // Recursively rename any nested TaskDefs embedded in the input
+        // (e.g., IF trueBranch/falseBranch, SWITCH cases, nested LOOP body).
+        if (copy.getInput() != null) {
+            renameNestedTaskDefs(copy.getInput(), suffix);
+        }
         return copy;
+    }
+
+    /**
+     * Recursively walks an object tree (Maps and Lists from JSON) and renames
+     * any Map that looks like a TaskDef (has both "name" and "type" keys) by
+     * appending the given suffix to its "name" value.
+     */
+    @SuppressWarnings("unchecked")
+    private void renameNestedTaskDefs(Object obj, String suffix) {
+        if (obj instanceof Map) {
+            Map<String, Object> map = (Map<String, Object>) obj;
+            if (map.containsKey("name") && map.containsKey("type")
+                    && map.get("name") instanceof String) {
+                map.put("name", map.get("name") + suffix);
+            }
+            for (Object value : map.values()) {
+                renameNestedTaskDefs(value, suffix);
+            }
+        } else if (obj instanceof List) {
+            for (Object item : (List<?>) obj) {
+                renameNestedTaskDefs(item, suffix);
+            }
+        }
     }
 
     /**
