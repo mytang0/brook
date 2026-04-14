@@ -300,10 +300,87 @@ public class LoopTask implements FlowTask {
                     nextTask = TaskDef.MATCHED;
                 }
             }
+        renameIterationTaskDefs(copy, iterationIndex);
+        return copy;
+    }
+
+    private void renameIterationTaskDefs(TaskDef root, int iterationIndex) {
+        Set<Object> visited = Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+        renameIterationTaskDefsRecursively(root, iterationIndex, visited);
+    }
+
+    private void renameIterationTaskDefsRecursively(
+            Object node, int iterationIndex, Set<Object> visited) {
+        if (node == null || visited.contains(node)) {
+            return;
+        }
+        visited.add(node);
+
+        if (node instanceof TaskDef) {
+            TaskDef taskDef = (TaskDef) node;
+            if (taskDef.getName() != null) {
+                taskDef.setName(taskDef.getName() + LOOP_INDEX_SEPARATOR + iterationIndex);
+            }
         }
 
-        if (nextTask != null && nextTask != TaskDef.MATCHED) {
-            output.put(INNER_LAST_TASK, nextTask.getName());
+        if (node instanceof Map) {
+            for (Object value : ((Map<?, ?>) node).values()) {
+                renameIterationTaskDefsRecursively(value, iterationIndex, visited);
+            }
+            return;
+        }
+
+        if (node instanceof Iterable) {
+            for (Object value : (Iterable<?>) node) {
+                renameIterationTaskDefsRecursively(value, iterationIndex, visited);
+            }
+            return;
+        }
+
+        Class<?> nodeClass = node.getClass();
+        if (nodeClass.isArray()) {
+            int length = java.lang.reflect.Array.getLength(node);
+            for (int i = 0; i < length; i++) {
+                renameIterationTaskDefsRecursively(
+                        java.lang.reflect.Array.get(node, i), iterationIndex, visited);
+            }
+            return;
+        }
+
+        if (isTerminalObject(nodeClass)) {
+            return;
+        }
+
+        Class<?> currentClass = nodeClass;
+        while (currentClass != null && currentClass != Object.class) {
+            for (java.lang.reflect.Field field : currentClass.getDeclaredFields()) {
+                if (java.lang.reflect.Modifier.isStatic(field.getModifiers())
+                        || field.getType().isPrimitive()
+                        || field.isSynthetic()) {
+                    continue;
+                }
+                try {
+                    field.setAccessible(true);
+                    renameIterationTaskDefsRecursively(
+                            field.get(node), iterationIndex, visited);
+                } catch (IllegalAccessException ignored) {
+                    // Best-effort traversal: inaccessible fields are skipped.
+                }
+            }
+            currentClass = currentClass.getSuperclass();
+        }
+    }
+
+    private boolean isTerminalObject(Class<?> type) {
+        return type.isEnum()
+                || String.class.equals(type)
+                || Number.class.isAssignableFrom(type)
+                || Boolean.class.equals(type)
+                || Character.class.equals(type)
+                || Class.class.equals(type)
+                || type.getName().startsWith("java.time.")
+                || type.getName().startsWith("java.lang.");
+    }
         }
 
         return nextTask;
