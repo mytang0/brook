@@ -21,6 +21,9 @@ import xyz.mytang0.brook.spi.task.FlowTask;
 
 import javax.validation.ValidationException;
 import javax.validation.constraints.NotNull;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -145,11 +148,21 @@ public class LoopTask implements FlowTask {
                 evaluated = loopOverRaw;
             }
 
+            // Normalize to List: accept List, Collection, Iterable, and arrays.
             if (evaluated instanceof List) {
                 loopOverValue = (List<Object>) evaluated;
+            } else if (evaluated != null && evaluated.getClass().isArray()) {
+                loopOverValue = Arrays.asList((Object[]) evaluated);
+            } else if (evaluated instanceof Collection) {
+                loopOverValue = new ArrayList<>((Collection<?>) evaluated);
+            } else if (evaluated instanceof Iterable) {
+                loopOverValue = new ArrayList<>();
+                for (Object item : (Iterable<?>) evaluated) {
+                    loopOverValue.add(item);
+                }
             } else {
                 throw new IllegalArgumentException(
-                        "The loop task 'loopOver' must evaluate to a list, got: "
+                        "The loop task 'loopOver' must evaluate to a list/collection/iterable, got: "
                                 + (evaluated == null ? "null" : evaluated.getClass().getName()));
             }
             iterations = loopOverValue.size();

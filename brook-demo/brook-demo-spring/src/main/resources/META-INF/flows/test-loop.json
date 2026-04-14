@@ -1,12 +1,22 @@
 {
   "name": "test-loop",
-  "description": "Single-item processing demo used until LOOP supports per-iteration task identity",
+  "description": "Loop task demo - iterates over a list and processes each item. Child task names are automatically suffixed with __LOOP_<index> per iteration (e.g., processItem__LOOP_0, processItem__LOOP_1) to ensure uniqueness.",
   "taskDefs": [
     {
-      "type": "COMPUTING",
-      "name": "processItem",
+      "type": "LOOP",
+      "name": "loopItems",
       "input": {
-        "source": "${flow.input.items[0]}"
+        "loopOver": "${flow.input.items}",
+        "loopBody": [
+          {
+            "type": "COMPUTING",
+            "name": "processItem",
+            "input": {
+              "source": "${loopItems.output.currentItem}",
+              "index": "${loopItems.output.currentIndex}"
+            }
+          }
+        ]
       }
     }
   ]
