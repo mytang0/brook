@@ -24,7 +24,6 @@ import javax.validation.constraints.NotNull;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -35,7 +34,7 @@ import static xyz.mytang0.brook.core.utils.ParameterUtils.flowContext;
 /**
  * Loop task, used to iterate over a collection and execute child tasks for each element.
  * <p>
- * Supports two modes:
+ * Supports two mutually exclusive modes:
  * <ul>
  *   <li>{@code loopOver}: iterate over a list/collection expression</li>
  *   <li>{@code loopCount}: iterate a fixed number of times</li>
@@ -44,6 +43,9 @@ import static xyz.mytang0.brook.core.utils.ParameterUtils.flowContext;
  * During each iteration, the loop output exposes {@code currentIndex} and {@code currentItem}
  * (when using loopOver) so that child tasks can reference them via
  * {@code ${loopTaskName.output.currentIndex}} and {@code ${loopTaskName.output.currentItem}}.
+ * <p>
+ * Child task names are suffixed with {@code __LOOP_<index>} per iteration to ensure
+ * uniqueness across iterations (FlowExecutor deduplicates tasks by name).
  */
 public class LoopTask implements FlowTask {
 
@@ -60,9 +62,10 @@ public class LoopTask implements FlowTask {
 
     static final String ITERATIONS_KEY = "iterations";
 
-    static final String LOOP_OVER_VALUE_KEY = "loopOverValue";
-
     static final String INNER_LAST_TASK = "innerLastTask";
+
+    // Separator used to create per-iteration unique task names.
+    static final String LOOP_INDEX_SEPARATOR = "__LOOP_";
 
     private final EngineActuator engineActuator;
 
@@ -106,7 +109,7 @@ public class LoopTask implements FlowTask {
         }
         if (hasLoopOver && hasLoopCount) {
             throw new ValidationException(
-                    "Only one of 'loopOver' or 'loopCount' may be specified");
+                    "'loopOver' and 'loopCount' are mutually exclusive, specify only one");
         }
     }
 
@@ -123,17 +126,24 @@ public class LoopTask implements FlowTask {
         if (taskDefInput.contains(Options.LOOP_OVER)) {
             Object loopOverRaw = taskDefInput.get(Options.LOOP_OVER);
 
-            // Evaluate expression if engine type is provided.
-            Object evaluated = Optional.ofNullable(taskDefInput.getString(Options.ENGINE_TYPE))
-                    .filter(StringUtils::isNotBlank)
-                    .map(engineType ->
-                            engineActuator.compute(
-                                    engineType,
-                                    String.valueOf(loopOverRaw),
-                                    flowContext(context.getFlowInstance())
-                            )
-                    )
-                    .orElse(loopOverRaw);
+            // Only invoke the compute engine when the value is still a string expression.
+            // If the parameter has already been resolved to a List by parameter mapping,
+            // passing it through the engine would break (e.g., "[a, b]" is not a valid expression).
+            Object evaluated;
+            if (loopOverRaw instanceof String) {
+                evaluated = Optional.ofNullable(taskDefInput.getString(Options.ENGINE_TYPE))
+                        .filter(StringUtils::isNotBlank)
+                        .map(engineType ->
+                                engineActuator.compute(
+                                        engineType,
+                                        (String) loopOverRaw,
+                                        flowContext(context.getFlowInstance())
+                                )
+                        )
+                        .orElse(loopOverRaw);
+            } else {
+                evaluated = loopOverRaw;
+            }
 
             if (evaluated instanceof List) {
                 loopOverValue = (List<Object>) evaluated;
@@ -160,11 +170,8 @@ public class LoopTask implements FlowTask {
         Map<String, Object> loopOutput = new HashMap<>();
         loopOutput.put(ITERATIONS_KEY, iterations);
         loopOutput.put(CURRENT_INDEX_KEY, 0);
-        if (loopOverValue != null) {
-            loopOutput.put(LOOP_OVER_VALUE_KEY, loopOverValue);
-            if (!loopOverValue.isEmpty()) {
-                loopOutput.put(CURRENT_ITEM_KEY, loopOverValue.get(0));
-            }
+        if (loopOverValue != null && !loopOverValue.isEmpty()) {
+            loopOutput.put(CURRENT_ITEM_KEY, loopOverValue.get(0));
         }
         loopTask.setOutput(loopOutput);
 
@@ -204,13 +211,13 @@ public class LoopTask implements FlowTask {
         TaskInstance mappingTask = mappingTaskOptional.get();
 
         if (mappingTask.getOutput() == null) {
-            throw new IllegalStateException("LOOP task output must not be null when determining next task");
+            throw new IllegalStateException(
+                    "LOOP task output must not be null when determining next task");
         }
 
         Map<String, Object> output = mappingTask.getOutput();
 
         int iterations = (int) output.get(ITERATIONS_KEY);
-        int currentIndex = (int) output.get(CURRENT_INDEX_KEY);
 
         // No iterations needed.
         if (iterations <= 0) {
@@ -228,29 +235,40 @@ public class LoopTask implements FlowTask {
         if (toBeSearched == target
                 || toBeSearched.getName().equals(target.getName())) {
             // Starting the loop: return first child task of iteration 0.
-            nextTask = loopBody.get(0);
+            output.put(CURRENT_INDEX_KEY, 0);
+            nextTask = createIterationTaskDef(loopBody.get(0), 0);
         } else {
-            // Find next task within the current iteration's loop body.
-            nextTask = findNextTaskFromChildren(loopBody, target);
+            // Find the target's position in the loop body by stripping the iteration suffix.
+            String originalName = stripIterationSuffix(target.getName());
+            int iterationIndex = extractIterationIndex(target.getName());
 
-            // If we've exhausted the current iteration (MATCHED = last child completed),
-            // advance to next iteration.
-            if (nextTask == TaskDef.MATCHED) {
-                int nextIndex = currentIndex + 1;
+            int pos = findPositionInLoopBody(loopBody, originalName);
+
+            if (pos < 0) {
+                // Target not found in loop body.
+                return null;
+            }
+
+            int effectiveIndex = iterationIndex >= 0
+                    ? iterationIndex
+                    : (int) output.get(CURRENT_INDEX_KEY);
+
+            if (pos + 1 < loopBody.size()) {
+                // More tasks in the current iteration.
+                nextTask = createIterationTaskDef(
+                        loopBody.get(pos + 1), effectiveIndex);
+            } else {
+                // Last task in the current iteration, advance to next.
+                int nextIndex = effectiveIndex + 1;
                 if (nextIndex < iterations) {
-                    // Move to next iteration.
                     output.put(CURRENT_INDEX_KEY, nextIndex);
-
-                    // Update current item if loopOver mode.
-                    List<Object> loopOverValue = (List<Object>) output.get(LOOP_OVER_VALUE_KEY);
-                    if (loopOverValue != null && nextIndex < loopOverValue.size()) {
-                        output.put(CURRENT_ITEM_KEY, loopOverValue.get(nextIndex));
-                    }
-
-                    // Return first task of loop body for next iteration.
-                    nextTask = loopBody.get(0);
+                    updateCurrentItem(output, mappingTask, nextIndex);
+                    nextTask = createIterationTaskDef(
+                            loopBody.get(0), nextIndex);
+                } else {
+                    // All iterations done.
+                    nextTask = TaskDef.MATCHED;
                 }
-                // else nextTask remains MATCHED, meaning all iterations done.
             }
         }
 
@@ -259,6 +277,81 @@ public class LoopTask implements FlowTask {
         }
 
         return nextTask;
+    }
+
+    /**
+     * Creates a deep copy of a TaskDef with an iteration-specific name suffix.
+     * This ensures each iteration's tasks have unique names, preventing
+     * the executor's name-based deduplication from filtering them out.
+     */
+    private TaskDef createIterationTaskDef(TaskDef original, int iterationIndex) {
+        TaskDef copy = JsonUtils.readValue(
+                JsonUtils.toJsonString(original), TaskDef.class);
+        copy.setName(original.getName() + LOOP_INDEX_SEPARATOR + iterationIndex);
+        return copy;
+    }
+
+    /**
+     * Strips the iteration suffix ({@code __LOOP_N}) from a task name
+     * to recover the original name defined in loopBody.
+     */
+    static String stripIterationSuffix(String taskName) {
+        int sepIndex = taskName.lastIndexOf(LOOP_INDEX_SEPARATOR);
+        return sepIndex >= 0
+                ? taskName.substring(0, sepIndex)
+                : taskName;
+    }
+
+    /**
+     * Extracts the iteration index from a suffixed task name.
+     * Returns -1 if the name has no iteration suffix.
+     */
+    static int extractIterationIndex(String taskName) {
+        int sepIndex = taskName.lastIndexOf(LOOP_INDEX_SEPARATOR);
+        if (sepIndex >= 0) {
+            try {
+                return Integer.parseInt(
+                        taskName.substring(
+                                sepIndex + LOOP_INDEX_SEPARATOR.length()));
+            } catch (NumberFormatException e) {
+                return -1;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Finds the position of a task in the loop body by its original name.
+     */
+    private int findPositionInLoopBody(List<TaskDef> loopBody,
+                                       String originalName) {
+        for (int i = 0; i < loopBody.size(); i++) {
+            if (loopBody.get(i).getName().equals(originalName)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Updates the currentItem in the output for the given iteration index.
+     * Retrieves the loopOver collection from the LOOP task's resolved input,
+     * avoiding the need to store the full collection in the output.
+     */
+    @SuppressWarnings("all")
+    private void updateCurrentItem(Map<String, Object> output,
+                                   TaskInstance mappingTask,
+                                   int nextIndex) {
+        Map<String, Object> input = mappingTask.getInput();
+        if (input != null) {
+            Object loopOver = input.get(Options.LOOP_OVER.key());
+            if (loopOver instanceof List) {
+                List<Object> loopOverValue = (List<Object>) loopOver;
+                if (nextIndex < loopOverValue.size()) {
+                    output.put(CURRENT_ITEM_KEY, loopOverValue.get(nextIndex));
+                }
+            }
+        }
     }
 
     @SuppressWarnings("all")
@@ -274,7 +367,7 @@ public class LoopTask implements FlowTask {
 
                     if (!(taskDef.getInput() instanceof Map)) {
                         throw new IllegalArgumentException(
-                            "Loop task input must be a Map");
+                                "Loop task input must be a Map");
                     }
 
                     loopBody = JsonUtils.convertValue(
@@ -291,25 +384,6 @@ public class LoopTask implements FlowTask {
         return loopBody;
     }
 
-    @SuppressWarnings("all")
-    private TaskDef findNextTaskFromChildren(final List<TaskDef> children, final TaskDef target) {
-        Iterator<TaskDef> iterator = children.iterator();
-
-        while (iterator.hasNext()) {
-            TaskDef nextTask =
-                    flowExecutor.getNextTask(iterator.next(), target);
-            if (nextTask == TaskDef.MATCHED) {
-                return iterator.hasNext()
-                        ? iterator.next()
-                        : TaskDef.MATCHED;
-            } else if (nextTask != null) {
-                return nextTask;
-            }
-        }
-
-        return null;
-    }
-
     static class Options {
 
         static final ConfigOption<String> ENGINE_TYPE = ConfigOptions
@@ -323,14 +397,15 @@ public class LoopTask implements FlowTask {
                 .classType(Object.class)
                 .noDefaultValue()
                 .withDescription("The collection to iterate over. " +
-                        "Can be a list literal or an expression that evaluates to a list.");
+                        "Can be a list literal or an expression. " +
+                        "Mutually exclusive with 'loopCount'.");
 
         static final ConfigOption<Integer> LOOP_COUNT = ConfigOptions
                 .key("loopCount")
                 .intType()
                 .noDefaultValue()
                 .withDescription("The number of iterations to perform. " +
-                        "Used when iterating a fixed number of times instead of over a collection.");
+                        "Mutually exclusive with 'loopOver'.");
 
         static final ConfigOption<List<TaskDef>> LOOP_BODY = ConfigOptions
                 .key("loopBody")
