@@ -1,14 +1,5 @@
 package xyz.mytang0.brook.core.utils;
 
-import xyz.mytang0.brook.common.constants.Delimiter;
-import xyz.mytang0.brook.common.metadata.definition.FlowDef;
-import xyz.mytang0.brook.common.metadata.definition.TaskDef;
-import xyz.mytang0.brook.common.metadata.extension.Extension;
-import xyz.mytang0.brook.common.metadata.instance.FlowInstance;
-import xyz.mytang0.brook.common.metadata.instance.TaskInstance;
-import xyz.mytang0.brook.common.utils.JsonUtils;
-import xyz.mytang0.brook.core.constants.FlowConstants;
-import xyz.mytang0.brook.core.tasks.LoopTask;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectReader;
@@ -24,6 +15,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.ClassUtils;
 import org.apache.commons.lang3.StringUtils;
+import xyz.mytang0.brook.common.constants.Delimiter;
+import xyz.mytang0.brook.common.constants.TaskConstants;
+import xyz.mytang0.brook.common.metadata.definition.FlowDef;
+import xyz.mytang0.brook.common.metadata.definition.TaskDef;
+import xyz.mytang0.brook.common.metadata.extension.Extension;
+import xyz.mytang0.brook.common.metadata.instance.FlowInstance;
+import xyz.mytang0.brook.common.metadata.instance.TaskInstance;
+import xyz.mytang0.brook.common.utils.JsonUtils;
+import xyz.mytang0.brook.core.constants.FlowConstants;
 
 import java.util.AbstractMap;
 import java.util.Collections;
@@ -368,10 +368,10 @@ public abstract class ParameterUtils {
                 // Detect names ending with __LOOP_<digits> (e.g. "processItem__LOOP_2").
                 // lastIndexOf is used intentionally: for nested loops the last suffix is
                 // stripped first, and each nesting level gets its own alias independently.
-                int sepIdx = taskName.lastIndexOf(LoopTask.LOOP_INDEX_SEPARATOR);
+                int sepIdx = taskName.lastIndexOf(TaskConstants.LOOP_INDEX_SEPARATOR);
                 if (sepIdx > 0) {
                     String indexPart = taskName.substring(
-                            sepIdx + LoopTask.LOOP_INDEX_SEPARATOR.length());
+                            sepIdx + TaskConstants.LOOP_INDEX_SEPARATOR.length());
                     try {
                         int iterIdx = Integer.parseInt(indexPart);
                         String baseName = taskName.substring(0, sepIdx);
@@ -384,7 +384,7 @@ public abstract class ParameterUtils {
                     } catch (NumberFormatException e) {
                         log.debug("Task name '{}' contains loop separator '{}' but has a "
                                         + "non-numeric suffix; skipping loop alias.",
-                                taskName, LoopTask.LOOP_INDEX_SEPARATOR);
+                                taskName, TaskConstants.LOOP_INDEX_SEPARATOR);
                     }
                 }
             });

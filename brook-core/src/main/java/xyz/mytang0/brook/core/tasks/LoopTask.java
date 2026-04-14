@@ -7,6 +7,7 @@ import org.apache.commons.lang3.StringUtils;
 import xyz.mytang0.brook.common.configuration.ConfigOption;
 import xyz.mytang0.brook.common.configuration.ConfigOptions;
 import xyz.mytang0.brook.common.configuration.Configuration;
+import xyz.mytang0.brook.common.constants.TaskConstants;
 import xyz.mytang0.brook.common.context.FlowContext;
 import xyz.mytang0.brook.common.context.TaskMapperContext;
 import xyz.mytang0.brook.common.extension.ExtensionDirector;
@@ -67,10 +68,6 @@ public class LoopTask implements FlowTask {
     static final String ITERATIONS_KEY = "iterations";
 
     static final String INNER_LAST_TASK = "innerLastTask";
-
-    // Separator used to create per-iteration unique task names.
-    // Public so ParameterUtils can inject loop-body aliases into the flow context.
-    public static final String LOOP_INDEX_SEPARATOR = "__LOOP_";
 
     // Keys that are specific to TaskDef (beyond "name" and "type") used to
     // distinguish real TaskDef Maps from arbitrary user payload Maps.
@@ -353,7 +350,7 @@ public class LoopTask implements FlowTask {
      * branches) to prevent name collisions across iterations.
      */
     private TaskDef createIterationTaskDef(TaskDef original, int iterationIndex) {
-        String suffix = LOOP_INDEX_SEPARATOR + iterationIndex;
+        String suffix = TaskConstants.LOOP_INDEX_SEPARATOR + iterationIndex;
 
         TaskDef copy = new TaskDef();
         copy.setType(original.getType());
@@ -460,12 +457,13 @@ public class LoopTask implements FlowTask {
      * Returns -1 if the name has no iteration suffix.
      */
     static int extractIterationIndex(String taskName) {
-        int sepIndex = taskName.lastIndexOf(LOOP_INDEX_SEPARATOR);
+        int sepIndex = taskName.lastIndexOf(TaskConstants.LOOP_INDEX_SEPARATOR);
         if (sepIndex >= 0) {
             try {
                 return Integer.parseInt(
                         taskName.substring(
-                                sepIndex + LOOP_INDEX_SEPARATOR.length()));
+                                sepIndex
+                                        + TaskConstants.LOOP_INDEX_SEPARATOR.length()));
             } catch (NumberFormatException e) {
                 return -1;
             }
