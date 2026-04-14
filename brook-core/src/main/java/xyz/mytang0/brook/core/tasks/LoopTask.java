@@ -69,7 +69,8 @@ public class LoopTask implements FlowTask {
     static final String INNER_LAST_TASK = "innerLastTask";
 
     // Separator used to create per-iteration unique task names.
-    static final String LOOP_INDEX_SEPARATOR = "__LOOP_";
+    // Public so ParameterUtils can inject loop-body aliases into the flow context.
+    public static final String LOOP_INDEX_SEPARATOR = "__LOOP_";
 
     // Keys that are specific to TaskDef (beyond "name" and "type") used to
     // distinguish real TaskDef Maps from arbitrary user payload Maps.

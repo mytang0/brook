@@ -8,6 +8,7 @@ import xyz.mytang0.brook.common.metadata.instance.FlowInstance;
 import xyz.mytang0.brook.common.metadata.instance.TaskInstance;
 import xyz.mytang0.brook.common.utils.JsonUtils;
 import xyz.mytang0.brook.core.constants.FlowConstants;
+import xyz.mytang0.brook.core.tasks.LoopTask;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectReader;
@@ -24,6 +25,7 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.ClassUtils;
 import org.apache.commons.lang3.StringUtils;
 
+import java.util.AbstractMap;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -350,9 +352,47 @@ public abstract class ParameterUtils {
         context.put(FlowConstants.FLOW, flowContext);
 
         if (CollectionUtils.isNotEmpty(flowInstance.getTaskInstances())) {
-            flowInstance.getTaskInstances().forEach(taskInstance ->
-                    context.put(taskInstance.getTaskDef().getName(), taskContext(taskInstance))
-            );
+            // Track the highest iteration index seen per loop-body base name, paired with
+            // its task context. This allows aliasing "X" -> the latest "X__LOOP_N" entry,
+            // so loop-body tasks can reference sibling outputs by their original (unsuffixed)
+            // names, e.g. ${processItem.output.result} instead of
+            // ${processItem__LOOP_0.output.result}.
+            final Map<String, Map.Entry<Integer, Map<String, Object>>> loopAliases =
+                    new HashMap<>();
+
+            flowInstance.getTaskInstances().forEach(taskInstance -> {
+                String taskName = taskInstance.getTaskDef().getName();
+                Map<String, Object> tc = taskContext(taskInstance);
+                context.put(taskName, tc);
+
+                // Detect names ending with __LOOP_<digits> (e.g. "processItem__LOOP_2").
+                // lastIndexOf is used intentionally: for nested loops the last suffix is
+                // stripped first, and each nesting level gets its own alias independently.
+                int sepIdx = taskName.lastIndexOf(LoopTask.LOOP_INDEX_SEPARATOR);
+                if (sepIdx > 0) {
+                    String indexPart = taskName.substring(
+                            sepIdx + LoopTask.LOOP_INDEX_SEPARATOR.length());
+                    try {
+                        int iterIdx = Integer.parseInt(indexPart);
+                        String baseName = taskName.substring(0, sepIdx);
+                        Map.Entry<Integer, Map<String, Object>> prev =
+                                loopAliases.get(baseName);
+                        if (prev == null || iterIdx > prev.getKey()) {
+                            loopAliases.put(baseName,
+                                    new AbstractMap.SimpleEntry<>(iterIdx, tc));
+                        }
+                    } catch (NumberFormatException e) {
+                        log.debug("Task name '{}' contains loop separator '{}' but has a "
+                                        + "non-numeric suffix; skipping loop alias.",
+                                taskName, LoopTask.LOOP_INDEX_SEPARATOR);
+                    }
+                }
+            });
+
+            // Register aliases only when no non-suffixed task with the same base name exists,
+            // to avoid shadowing an explicit top-level task that happens to share a name.
+            loopAliases.forEach((baseName, entry) ->
+                    context.putIfAbsent(baseName, entry.getValue()));
         }
 
         return context;
