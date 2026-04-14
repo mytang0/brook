@@ -27,6 +27,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -268,119 +269,71 @@ public class LoopTask implements FlowTask {
             output.put(CURRENT_INDEX_KEY, 0);
             nextTask = createIterationTaskDef(loopBody.get(0), 0);
         } else {
-            // Find the target's position in the loop body by stripping the iteration suffix.
-            String originalName = stripIterationSuffix(target.getName());
+            // Determine the current iteration index from the target's name suffix
+            // or fall back to the stored currentIndex.
             int iterationIndex = extractIterationIndex(target.getName());
-
-            int pos = findPositionInLoopBody(loopBody, originalName);
-
-            if (pos < 0) {
-                // Target not found in loop body.
-                return null;
-            }
-
             int effectiveIndex = iterationIndex >= 0
                     ? iterationIndex
                     : (int) output.get(CURRENT_INDEX_KEY);
 
-            if (pos + 1 < loopBody.size()) {
-                // More tasks in the current iteration.
-                nextTask = createIterationTaskDef(
-                        loopBody.get(pos + 1), effectiveIndex);
-            } else {
-                // Last task in the current iteration, advance to next.
+            // Create iteration-specific copies of loopBody with __LOOP_<index> suffixed names,
+            // so that flowExecutor.getNextTask() can match against the target (which was
+            // also scheduled with suffixed names).
+            List<TaskDef> iterationBody = new ArrayList<>();
+            for (TaskDef bodyTask : loopBody) {
+                iterationBody.add(createIterationTaskDef(bodyTask, effectiveIndex));
+            }
+
+            // Traverse using flowExecutor.getNextTask() (like IFTask/SwitchTask do)
+            // so that nested control-flow tasks (IF/SWITCH/SUB_FLOW) within the loop body
+            // are properly traversed instead of relying on top-level name matching.
+            nextTask = findNextTaskFromChildren(iterationBody, target);
+
+            if (nextTask == TaskDef.MATCHED) {
+                // All tasks in current iteration completed, advance to next.
                 int nextIndex = effectiveIndex + 1;
                 if (nextIndex < iterations) {
                     output.put(CURRENT_INDEX_KEY, nextIndex);
                     updateCurrentItem(output, mappingTask, nextIndex);
                     nextTask = createIterationTaskDef(
                             loopBody.get(0), nextIndex);
-                } else {
-                    // All iterations done.
-                    nextTask = TaskDef.MATCHED;
                 }
+                // else nextTask remains MATCHED, all iterations done.
             }
-        renameIterationTaskDefs(copy, iterationIndex);
-        return copy;
+        }
+
+        if (nextTask != null && nextTask != TaskDef.MATCHED) {
+            output.put(INNER_LAST_TASK, nextTask.getName());
+        }
+
+        return nextTask;
+    }
+    /**
+     * Traverses loop body children using flowExecutor.getNextTask() to properly
+     * support nested control-flow tasks (IF/SWITCH/SUB_FLOW). When getNextTask()
+     * returns MATCHED for a child, the next sibling is returned (or MATCHED if
+     * no more siblings exist). This follows the same pattern as IFTask/SwitchTask.
+     */
+    @SuppressWarnings("all")
+    private TaskDef findNextTaskFromChildren(final List<TaskDef> children,
+                                             final TaskDef target) {
+        Iterator<TaskDef> iterator = children.iterator();
+
+        while (iterator.hasNext()) {
+            TaskDef nextTask =
+                    flowExecutor.getNextTask(iterator.next(), target);
+            if (nextTask == TaskDef.MATCHED) {
+                return iterator.hasNext()
+                        ? iterator.next()
+                        : TaskDef.MATCHED;
+            } else if (nextTask != null) {
+                return nextTask;
+            }
+        }
+
+        return null;
     }
 
-    private void renameIterationTaskDefs(TaskDef root, int iterationIndex) {
-        Set<Object> visited = Collections.newSetFromMap(new java.util.IdentityHashMap<>());
-        renameIterationTaskDefsRecursively(root, iterationIndex, visited);
-    }
-
-    private void renameIterationTaskDefsRecursively(
-            Object node, int iterationIndex, Set<Object> visited) {
-        if (node == null || visited.contains(node)) {
-            return;
-        }
-        visited.add(node);
-
-        if (node instanceof TaskDef) {
-            TaskDef taskDef = (TaskDef) node;
-            if (taskDef.getName() != null) {
-                taskDef.setName(taskDef.getName() + LOOP_INDEX_SEPARATOR + iterationIndex);
-            }
-        }
-
-        if (node instanceof Map) {
-            for (Object value : ((Map<?, ?>) node).values()) {
-                renameIterationTaskDefsRecursively(value, iterationIndex, visited);
-            }
-            return;
-        }
-
-        if (node instanceof Iterable) {
-            for (Object value : (Iterable<?>) node) {
-                renameIterationTaskDefsRecursively(value, iterationIndex, visited);
-            }
-            return;
-        }
-
-        Class<?> nodeClass = node.getClass();
-        if (nodeClass.isArray()) {
-            int length = java.lang.reflect.Array.getLength(node);
-            for (int i = 0; i < length; i++) {
-                renameIterationTaskDefsRecursively(
-                        java.lang.reflect.Array.get(node, i), iterationIndex, visited);
-            }
-            return;
-        }
-
-        if (isTerminalObject(nodeClass)) {
-            return;
-        }
-
-        Class<?> currentClass = nodeClass;
-        while (currentClass != null && currentClass != Object.class) {
-            for (java.lang.reflect.Field field : currentClass.getDeclaredFields()) {
-                if (java.lang.reflect.Modifier.isStatic(field.getModifiers())
-                        || field.getType().isPrimitive()
-                        || field.isSynthetic()) {
-                    continue;
-                }
-                try {
-                    field.setAccessible(true);
-                    renameIterationTaskDefsRecursively(
-                            field.get(node), iterationIndex, visited);
-                } catch (IllegalAccessException ignored) {
-                    // Best-effort traversal: inaccessible fields are skipped.
-                }
-            }
-            currentClass = currentClass.getSuperclass();
-        }
-    }
-
-    private boolean isTerminalObject(Class<?> type) {
-        return type.isEnum()
-                || String.class.equals(type)
-                || Number.class.isAssignableFrom(type)
-                || Boolean.class.equals(type)
-                || Character.class.equals(type)
-                || Class.class.equals(type)
-                || type.getName().startsWith("java.time.")
-                || type.getName().startsWith("java.lang.");
-    }
     /**
      * Creates a deep copy of a TaskDef with an iteration-specific name suffix.
      * This ensures each iteration's tasks have unique names, preventing
@@ -426,17 +379,6 @@ public class LoopTask implements FlowTask {
     }
 
     /**
-     * Strips the iteration suffix ({@code __LOOP_N}) from a task name
-     * to recover the original name defined in loopBody.
-     */
-    static String stripIterationSuffix(String taskName) {
-        int sepIndex = taskName.lastIndexOf(LOOP_INDEX_SEPARATOR);
-        return sepIndex >= 0
-                ? taskName.substring(0, sepIndex)
-                : taskName;
-    }
-
-    /**
      * Extracts the iteration index from a suffixed task name.
      * Returns -1 if the name has no iteration suffix.
      */
@@ -449,19 +391,6 @@ public class LoopTask implements FlowTask {
                                 sepIndex + LOOP_INDEX_SEPARATOR.length()));
             } catch (NumberFormatException e) {
                 return -1;
-            }
-        }
-        return -1;
-    }
-
-    /**
-     * Finds the position of a task in the loop body by its original name.
-     */
-    private int findPositionInLoopBody(List<TaskDef> loopBody,
-                                       String originalName) {
-        for (int i = 0; i < loopBody.size(); i++) {
-            if (loopBody.get(i).getName().equals(originalName)) {
-                return i;
             }
         }
         return -1;
