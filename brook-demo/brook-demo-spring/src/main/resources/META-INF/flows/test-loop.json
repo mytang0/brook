@@ -1,21 +1,12 @@
 {
   "name": "test-loop",
-  "description": "Loop task demo - iterates over a list and processes each item",
+  "description": "Single-item processing demo used until LOOP supports per-iteration task identity",
   "taskDefs": [
     {
-      "type": "LOOP",
-      "name": "loopItems",
+      "type": "COMPUTING",
+      "name": "processItem",
       "input": {
-        "loopOver": "${flow.input.items}",
-        "loopBody": [
-          {
-            "type": "COMPUTING",
-            "name": "processItem",
-            "input": {
-              "source": "${loopItems.output.currentItem}"
-            }
-          }
-        ]
+        "source": "${flow.input.items[0]}"
       }
     }
   ]
