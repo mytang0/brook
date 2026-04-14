@@ -21,8 +21,8 @@ import xyz.mytang0.brook.spi.task.FlowTask;
 
 import javax.validation.ValidationException;
 import javax.validation.constraints.NotNull;
+import java.lang.reflect.Array;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -149,10 +149,11 @@ public class LoopTask implements FlowTask {
             }
 
             // Normalize to List: accept List, Collection, Iterable, and arrays.
-            if (evaluated instanceof List) {
+            if (evaluated == null) {
+                throw new IllegalArgumentException(
+                        "The loop task 'loopOver' must evaluate to a list/collection/iterable, got: null");
+            } else if (evaluated instanceof List) {
                 loopOverValue = (List<Object>) evaluated;
-            } else if (evaluated != null && evaluated.getClass().isArray()) {
-                loopOverValue = Arrays.asList((Object[]) evaluated);
             } else if (evaluated instanceof Collection) {
                 loopOverValue = new ArrayList<>((Collection<?>) evaluated);
             } else if (evaluated instanceof Iterable) {
@@ -160,10 +161,16 @@ public class LoopTask implements FlowTask {
                 for (Object item : (Iterable<?>) evaluated) {
                     loopOverValue.add(item);
                 }
+            } else if (evaluated.getClass().isArray()) {
+                int length = Array.getLength(evaluated);
+                loopOverValue = new ArrayList<>(length);
+                for (int i = 0; i < length; i++) {
+                    loopOverValue.add(Array.get(evaluated, i));
+                }
             } else {
                 throw new IllegalArgumentException(
                         "The loop task 'loopOver' must evaluate to a list/collection/iterable, got: "
-                                + (evaluated == null ? "null" : evaluated.getClass().getName()));
+                                + evaluated.getClass().getName());
             }
             iterations = loopOverValue.size();
         } else {
