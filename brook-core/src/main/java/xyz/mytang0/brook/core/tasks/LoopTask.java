@@ -102,7 +102,11 @@ public class LoopTask implements FlowTask {
         boolean hasLoopCount = configuration.contains(Options.LOOP_COUNT);
         if (!hasLoopOver && !hasLoopCount) {
             throw new ValidationException(
-                    "At least one of 'loopOver' or 'loopCount' must be specified");
+                    "Exactly one of 'loopOver' or 'loopCount' must be specified");
+        }
+        if (hasLoopOver && hasLoopCount) {
+            throw new ValidationException(
+                    "Only one of 'loopOver' or 'loopCount' may be specified");
         }
     }
 
