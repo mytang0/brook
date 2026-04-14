@@ -143,7 +143,7 @@ public class LoopTask implements FlowTask {
             Integer loopCount = taskDefInput.get(Options.LOOP_COUNT);
             if (loopCount == null || loopCount < 0) {
                 throw new IllegalArgumentException(
-                        "The loop task 'loopCount' must be a non-negative integer");
+                        "The loop task 'loopCount' must be specified and be a non-negative integer");
             }
             iterations = loopCount;
         }
@@ -200,7 +200,7 @@ public class LoopTask implements FlowTask {
         TaskInstance mappingTask = mappingTaskOptional.get();
 
         if (mappingTask.getOutput() == null) {
-            throw new IllegalStateException("When next, the LOOP task output null");
+            throw new IllegalStateException("LOOP task output must not be null when determining next task");
         }
 
         Map<String, Object> output = mappingTask.getOutput();
@@ -239,7 +239,7 @@ public class LoopTask implements FlowTask {
 
                     // Update current item if loopOver mode.
                     List<Object> loopOverValue = (List<Object>) output.get(LOOP_OVER_VALUE_KEY);
-                    if (loopOverValue != null) {
+                    if (loopOverValue != null && nextIndex < loopOverValue.size()) {
                         output.put(CURRENT_ITEM_KEY, loopOverValue.get(nextIndex));
                     }
 
@@ -269,7 +269,8 @@ public class LoopTask implements FlowTask {
                 if (loopBody == null) {
 
                     if (!(taskDef.getInput() instanceof Map)) {
-                        throw new IllegalArgumentException("The loop task input type is not map");
+                        throw new IllegalArgumentException(
+                            "Loop task input must be a Map");
                     }
 
                     loopBody = JsonUtils.convertValue(
