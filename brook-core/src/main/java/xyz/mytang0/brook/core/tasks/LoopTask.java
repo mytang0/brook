@@ -381,11 +381,6 @@ public class LoopTask implements FlowTask {
                 || type.getName().startsWith("java.time.")
                 || type.getName().startsWith("java.lang.");
     }
-        }
-
-        return nextTask;
-    }
-
     /**
      * Creates a deep copy of a TaskDef with an iteration-specific name suffix.
      * This ensures each iteration's tasks have unique names, preventing
