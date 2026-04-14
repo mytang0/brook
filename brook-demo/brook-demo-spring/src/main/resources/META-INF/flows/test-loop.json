@@ -1,0 +1,22 @@
+{
+  "name": "test-loop",
+  "description": "Loop task demo - iterates over a list and processes each item",
+  "taskDefs": [
+    {
+      "type": "LOOP",
+      "name": "loopItems",
+      "input": {
+        "loopOver": "${flow.input.items}",
+        "loopBody": [
+          {
+            "type": "COMPUTING",
+            "name": "processItem",
+            "input": {
+              "source": "${loopItems.output.currentItem}"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
