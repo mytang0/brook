@@ -23,6 +23,7 @@ import javax.validation.ValidationException;
 import javax.validation.constraints.NotNull;
 import java.lang.reflect.Array;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -70,6 +71,15 @@ public class LoopTask implements FlowTask {
 
     // Separator used to create per-iteration unique task names.
     static final String LOOP_INDEX_SEPARATOR = "__LOOP_";
+
+    // Keys that are specific to TaskDef (beyond "name" and "type") used to
+    // distinguish real TaskDef Maps from arbitrary user payload Maps.
+    // A Map must have "name" + "type" AND at least one of these keys to be
+    // considered a TaskDef for per-iteration renaming.
+    private static final Set<String> TASK_DEF_INDICATOR_KEYS = new HashSet<>(Arrays.asList(
+            "input", "controlDef", "progressDef", "logDef", "linkDef",
+            "checkDef", "hangDef", "callback", "extension", "template"
+    ));
 
     private final EngineActuator engineActuator;
 
@@ -357,15 +367,19 @@ public class LoopTask implements FlowTask {
 
     /**
      * Recursively walks an object tree (Maps and Lists from JSON) and renames
-     * any Map that looks like a TaskDef (has both "name" and "type" keys) by
-     * appending the given suffix to its "name" value.
+     * any Map that looks like a TaskDef by appending the given suffix to its
+     * "name" value.
+     * <p>
+     * A Map is identified as a TaskDef only if it has both "name" and "type"
+     * (String values) AND at least one additional TaskDef-specific key
+     * (e.g., "input", "controlDef"). This prevents unintentional renaming of
+     * user payload objects that happen to have "name" and "type" keys.
      */
     @SuppressWarnings("unchecked")
     private void renameNestedTaskDefs(Object obj, String suffix) {
         if (obj instanceof Map) {
             Map<String, Object> map = (Map<String, Object>) obj;
-            if (map.containsKey("name") && map.containsKey("type")
-                    && map.get("name") instanceof String) {
+            if (isTaskDefMap(map)) {
                 map.put("name", map.get("name") + suffix);
             }
             for (Object value : map.values()) {
@@ -376,6 +390,26 @@ public class LoopTask implements FlowTask {
                 renameNestedTaskDefs(item, suffix);
             }
         }
+    }
+
+    /**
+     * Returns {@code true} if the given Map looks like a serialized TaskDef.
+     * Requires "name" and "type" as String values, plus at least one
+     * additional key that is specific to TaskDef structure (e.g., "input",
+     * "controlDef"), to avoid false positives on arbitrary user data.
+     */
+    private static boolean isTaskDefMap(Map<String, Object> map) {
+        if (!(map.containsKey("name") && map.containsKey("type")
+                && map.get("name") instanceof String
+                && map.get("type") instanceof String)) {
+            return false;
+        }
+        for (String key : TASK_DEF_INDICATOR_KEYS) {
+            if (map.containsKey(key)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
