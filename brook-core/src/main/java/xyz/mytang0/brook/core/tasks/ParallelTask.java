@@ -22,9 +22,11 @@ import javax.validation.ValidationException;
 import javax.validation.constraints.NotNull;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -102,6 +104,7 @@ public class ParallelTask implements FlowTask {
                     "PARALLEL task requires at least one branch");
         }
         Set<String> branchNames = new HashSet<>();
+        Set<String> taskNames = new HashSet<>();
         for (Branch branch : branches) {
             if (branch.getName() == null || branch.getName().isEmpty()) {
                 throw new ValidationException(
@@ -114,6 +117,17 @@ public class ParallelTask implements FlowTask {
             if (branch.getTasks() == null || branch.getTasks().isEmpty()) {
                 throw new ValidationException(
                         "Branch '" + branch.getName() + "' must have at least one task");
+            }
+            for (TaskDef taskDef : branch.getTasks()) {
+                if (taskDef == null || taskDef.getName() == null || taskDef.getName().isEmpty()) {
+                    throw new ValidationException(
+                            "Each task in PARALLEL branch '" + branch.getName()
+                                    + "' must have a non-empty 'name'");
+                }
+                if (!taskNames.add(taskDef.getName())) {
+                    throw new ValidationException(
+                            "Duplicate task name across PARALLEL branches: " + taskDef.getName());
+                }
             }
         }
     }
@@ -130,7 +144,7 @@ public class ParallelTask implements FlowTask {
     @Override
     public List<TaskInstance> getMappedTasks(TaskMapperContext context) {
 
-        List<Branch> branches = getBranches(context.getTaskDef());
+        List<Branch> branches = getParsedConfig(context.getTaskDef()).getBranches();
 
         // Build parallel task self.
         TaskInstance parallelTask = TaskInstance.create(context.getTaskDef());
@@ -316,7 +330,8 @@ public class ParallelTask implements FlowTask {
                     "PARALLEL task output must not be null when determining next task");
         }
 
-        final List<Branch> branches = getBranches(toBeSearched);
+        final ParsedConfig parsedConfig = getParsedConfig(toBeSearched);
+        final List<Branch> branches = parsedConfig.getBranches();
 
         if (CollectionUtils.isEmpty(branches)) {
             return null;
@@ -331,12 +346,19 @@ public class ParallelTask implements FlowTask {
             return TaskDef.MATCHED;
         }
 
-        // Find which branch the target belongs to by iterating all branches.
-        // Since task names are guaranteed unique, only one branch will match.
+        // Fast path: if target is a configured top-level branch task, locate branch directly.
+        Branch indexedBranch = parsedConfig.getTopLevelTaskToBranch().get(target.getName());
+        if (indexedBranch != null) {
+            return findNextTaskFromChildren(indexedBranch.getTasks(), target);
+        }
+
+        // Fallback path: traverse all branches for nested control-flow tasks.
         for (Branch branch : branches) {
-            TaskDef nextTask = findNextTaskFromChildren(branch.getTasks(), target);
-            if (nextTask != null) {
-                return nextTask;
+            if (CollectionUtils.isNotEmpty(branch.getTasks())) {
+                TaskDef nextTask = findNextTaskFromChildren(branch.getTasks(), target);
+                if (nextTask != null) {
+                    return nextTask;
+                }
             }
         }
 
@@ -347,7 +369,7 @@ public class ParallelTask implements FlowTask {
      * Returns the first TaskDef for each branch.
      */
     public List<TaskDef> getBranchEntryTasks(TaskDef taskDef) {
-        List<Branch> branches = getBranches(taskDef);
+        List<Branch> branches = getParsedConfig(taskDef).getBranches();
         List<TaskDef> entryTasks = new ArrayList<>(branches.size());
         for (Branch branch : branches) {
             if (CollectionUtils.isNotEmpty(branch.getTasks())) {
@@ -377,32 +399,51 @@ public class ParallelTask implements FlowTask {
      */
     @SuppressWarnings("unchecked")
     List<Branch> getBranches(@NotNull final TaskDef taskDef) {
-        List<Branch> branches = taskDef.getParsed();
+        return getParsedConfig(taskDef).getBranches();
+    }
 
-        if (branches == null) {
+    @SuppressWarnings("unchecked")
+    private ParsedConfig getParsedConfig(@NotNull final TaskDef taskDef) {
+        ParsedConfig parsedConfig = taskDef.getParsed();
+
+        if (parsedConfig == null) {
             synchronized (taskDef) {
-
-                branches = taskDef.getParsed();
-
-                if (branches == null) {
+                parsedConfig = taskDef.getParsed();
+                if (parsedConfig == null) {
 
                     if (!(taskDef.getInput() instanceof Map)) {
                         throw new IllegalArgumentException(
                                 "PARALLEL task input must be a Map");
                     }
 
-                    branches = JsonUtils.convertValue(
+                    List<Branch> branches = JsonUtils.convertValue(
                             ((Map<String, Object>) taskDef.getInput())
                                     .get(Options.BRANCHES.key()),
                             new TypeReference<List<Branch>>() {
                             }
                     );
 
-                    taskDef.setParsed(branches);
+                    Map<String, Branch> topLevelTaskToBranch = new LinkedHashMap<>();
+                    Set<String> allBranchTaskNames = new HashSet<>();
+                    for (Branch branch : branches) {
+                        if (CollectionUtils.isNotEmpty(branch.getTasks())) {
+                            for (TaskDef branchTask : branch.getTasks()) {
+                                allBranchTaskNames.add(branchTask.getName());
+                                topLevelTaskToBranch.putIfAbsent(branchTask.getName(), branch);
+                            }
+                        }
+                    }
+
+                    parsedConfig = new ParsedConfig(
+                            branches,
+                            Collections.unmodifiableSet(allBranchTaskNames),
+                            Collections.unmodifiableMap(topLevelTaskToBranch)
+                    );
+                    taskDef.setParsed(parsedConfig);
                 }
             }
         }
-        return branches;
+        return parsedConfig;
     }
 
     // ========================================================================
@@ -418,7 +459,8 @@ public class ParallelTask implements FlowTask {
             final FlowInstance currentFlow,
             final TaskInstance parallelTask) {
 
-        Set<String> branchTaskNames = collectBranchTaskNames(parallelTask.getTaskDef());
+        Set<String> branchTaskNames =
+                getParsedConfig(parallelTask.getTaskDef()).getAllBranchTaskNames();
 
         return currentFlow.getTaskInstances().stream()
                 .filter(t -> branchTaskNames.contains(t.getTaskName()))
@@ -436,7 +478,8 @@ public class ParallelTask implements FlowTask {
             final FlowInstance currentFlow,
             final TaskInstance parallelTask) {
 
-        Set<String> branchTaskNames = collectBranchTaskNames(parallelTask.getTaskDef());
+        Set<String> branchTaskNames =
+                getParsedConfig(parallelTask.getTaskDef()).getAllBranchTaskNames();
 
         for (TaskInstance task : currentFlow.getTaskInstances()) {
             if (!task.getStatus().isTerminal()
@@ -448,24 +491,6 @@ public class ParallelTask implements FlowTask {
                 }
             }
         }
-    }
-
-    /**
-     * Collects all task names defined across all branches. Used by
-     * {@link #allBranchChainsTerminal} and {@link #cancelRemainingBranches}
-     * to identify which task instances belong to this PARALLEL task.
-     */
-    private Set<String> collectBranchTaskNames(TaskDef taskDef) {
-        List<Branch> branches = getBranches(taskDef);
-        Set<String> names = new HashSet<>();
-        for (Branch branch : branches) {
-            if (branch.getTasks() != null) {
-                for (TaskDef td : branch.getTasks()) {
-                    names.add(td.getName());
-                }
-            }
-        }
-        return names;
     }
 
     /**
@@ -515,6 +540,10 @@ public class ParallelTask implements FlowTask {
     private TaskDef findNextTaskFromChildren(
             final List<TaskDef> children,
             final TaskDef target) {
+
+        if (flowExecutor == null) {
+            throw new IllegalStateException("flowExecutor is not initialized for PARALLEL task");
+        }
 
         Iterator<TaskDef> iterator = children.iterator();
 
@@ -572,5 +601,17 @@ public class ParallelTask implements FlowTask {
         private String name;
 
         private List<TaskDef> tasks;
+    }
+
+    @Data
+    private static class ParsedConfig implements Serializable {
+
+        private static final long serialVersionUID = -1019391089011710638L;
+
+        private final List<Branch> branches;
+
+        private final Set<String> allBranchTaskNames;
+
+        private final Map<String, Branch> topLevelTaskToBranch;
     }
 }
