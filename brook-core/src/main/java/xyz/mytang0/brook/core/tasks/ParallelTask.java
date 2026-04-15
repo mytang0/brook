@@ -3,6 +3,7 @@ package xyz.mytang0.brook.core.tasks;
 import com.fasterxml.jackson.core.type.TypeReference;
 import lombok.Data;
 import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import xyz.mytang0.brook.common.configuration.ConfigOption;
 import xyz.mytang0.brook.common.configuration.ConfigOptions;
@@ -57,6 +58,7 @@ import java.util.Set;
  * }
  * </pre>
  */
+@Slf4j
 public class ParallelTask implements FlowTask {
 
     static final ConfigOption<Map<String, Object>> CATALOG = ConfigOptions
@@ -299,7 +301,7 @@ public class ParallelTask implements FlowTask {
         return FailurePolicy.FAIL_FAST;
     }
 
-    @SuppressWarnings("all")
+    @SuppressWarnings("unchecked")
     @Override
     public TaskDef next(final TaskDef toBeSearched, final TaskDef target) {
 
@@ -402,7 +404,7 @@ public class ParallelTask implements FlowTask {
     /**
      * Returns the list of branches parsed from the task definition.
      */
-    @SuppressWarnings("all")
+    @SuppressWarnings("unchecked")
     List<Branch> getBranches(@NotNull final TaskDef taskDef) {
         List<Branch> branches = taskDef.getParsed();
 
@@ -524,6 +526,8 @@ public class ParallelTask implements FlowTask {
                 return;
             } catch (Exception e) {
                 // Fall back to direct status change
+                log.warn("Failed to cancel task {} via FlowTask SPI, falling back to direct status change: {}",
+                        task.getTaskName(), e.getMessage());
             }
         }
         if (!task.getStatus().isTerminal()) {
@@ -681,7 +685,7 @@ public class ParallelTask implements FlowTask {
         return -1;
     }
 
-    @SuppressWarnings("all")
+    @SuppressWarnings("unchecked")
     private TaskDef findNextTaskFromChildren(
             final List<TaskDef> branchTasks,
             final TaskDef target,
