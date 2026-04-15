@@ -23,7 +23,6 @@ import javax.validation.constraints.NotNull;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -34,10 +33,14 @@ import java.util.Set;
 /**
  * Parallel task, used to execute multiple branches concurrently.
  * <p>
- * Each branch contains one or more sequential TaskDefs that are
- * executed in parallel with other branches. The PARALLEL task
- * completes when all branches complete (or fails according to the
- * configured failure policy).
+ * Each branch contains one or more sequential TaskDefs. The PARALLEL task
+ * creates one TaskInstance per branch entry task during {@link #getMappedTasks(TaskMapperContext)},
+ * linking them via {@code parentTaskId}/{@code subTaskIds} to the PARALLEL task itself.
+ * <p>
+ * Branch entry tasks are scheduled through the normal {@code decide()} loop.
+ * The PARALLEL task monitors its children: when all branch tasks reach a terminal
+ * state, the PARALLEL task itself completes. This design ensures that each branch
+ * task can run on any node/instance independently.
  * <p>
  * Child task names are suffixed with {@code __PARALLEL_<branchIndex>}
  * per branch to ensure uniqueness across branches (FlowExecutor
@@ -123,6 +126,15 @@ public class ParallelTask implements FlowTask {
         }
     }
 
+    /**
+     * Creates the PARALLEL task itself AND the entry tasks for all branches.
+     * <p>
+     * Each branch entry task has {@code parentTaskId} set to the PARALLEL task's ID,
+     * and the PARALLEL task's {@code subTaskIds} contains the IDs of all branch entry tasks.
+     * <p>
+     * This allows the scheduler to process all branch tasks through the normal
+     * {@code decide()} loop, while maintaining the parent-child relationship.
+     */
     @Override
     public List<TaskInstance> getMappedTasks(TaskMapperContext context) {
 
@@ -137,12 +149,134 @@ public class ParallelTask implements FlowTask {
         parallelOutput.put(BRANCH_OUTPUTS_KEY, new HashMap<>());
         parallelTask.setOutput(parallelOutput);
 
-        return Collections.singletonList(parallelTask);
+        // Create one entry task for each branch, linking them to the parallel task.
+        List<String> subTaskIds = new ArrayList<>(branches.size());
+        List<TaskInstance> result = new ArrayList<>(branches.size() + 1);
+        result.add(parallelTask);
+
+        for (int i = 0; i < branches.size(); i++) {
+            Branch branch = branches.get(i);
+            if (CollectionUtils.isNotEmpty(branch.getTasks())) {
+                TaskDef branchEntryDef = createBranchTaskDef(
+                        branch.getTasks().get(0), i);
+
+                TaskInstance branchEntry = TaskInstance.create(branchEntryDef);
+                branchEntry.setFlowId(context.getFlowInstance().getFlowId());
+                branchEntry.setParentTaskId(parallelTask.getTaskId());
+
+                subTaskIds.add(branchEntry.getTaskId());
+                result.add(branchEntry);
+            }
+        }
+
+        parallelTask.setSubTaskIds(subTaskIds);
+
+        return result;
     }
 
+    /**
+     * Monitors the completion of all child branch tasks.
+     * <p>
+     * Returns {@code false} while any branch still has pending (non-terminal) tasks,
+     * causing the executor to re-evaluate this task on subsequent decide() cycles.
+     * Returns {@code true} and sets status to COMPLETED when all branches are done.
+     * <p>
+     * For FAIL_FAST policy: if any branch task has failed, the PARALLEL task
+     * immediately fails and cancels remaining branches.
+     */
     @Override
     public boolean execute(TaskInstance taskInstance) {
-        taskInstance.setStatus(TaskStatus.COMPLETED);
+
+        FlowInstance currentFlow = FlowContext.getCurrentFlow();
+        if (currentFlow == null) {
+            // Can't determine branch status without flow context
+            taskInstance.setStatus(TaskStatus.COMPLETED);
+            return true;
+        }
+
+        List<String> subTaskIds = taskInstance.getSubTaskIds();
+        if (CollectionUtils.isEmpty(subTaskIds)) {
+            // No branches; complete immediately
+            taskInstance.setStatus(TaskStatus.COMPLETED);
+            return true;
+        }
+
+        FailurePolicy failurePolicy = getFailurePolicy(taskInstance.getTaskDef());
+
+        // Check status of all immediate child (branch entry) tasks.
+        // A branch is "done" when its entry task has been executed (is terminal)
+        // AND has no further pending tasks in the branch chain.
+        boolean allTerminal = true;
+        boolean anyFailed = false;
+        String failedBranchTask = null;
+
+        for (String subTaskId : subTaskIds) {
+            Optional<TaskInstance> subTaskOpt = currentFlow.getTaskById(subTaskId);
+            if (!subTaskOpt.isPresent()) {
+                // Sub-task not yet scheduled/persisted; not terminal.
+                allTerminal = false;
+                continue;
+            }
+
+            TaskInstance subTask = subTaskOpt.get();
+            if (!subTask.getStatus().isTerminal()) {
+                allTerminal = false;
+            }
+
+            if (subTask.getStatus().isUnsuccessfullyTerminated()) {
+                anyFailed = true;
+                failedBranchTask = subTask.getTaskName();
+            }
+        }
+
+        // Also check all descendant tasks in each branch:
+        // A branch entry task may have completed, but its successor in the
+        // branch may still be running. We check that the last task in each
+        // branch chain has reached a terminal state.
+        if (allTerminal) {
+            allTerminal = allBranchChainsTerminal(
+                    currentFlow, taskInstance, subTaskIds);
+        }
+
+        if (failurePolicy == FailurePolicy.FAIL_FAST && anyFailed) {
+            // Fail fast: cancel remaining non-terminal branches
+            cancelRemainingBranches(currentFlow, subTaskIds);
+
+            Map<String, Object> output = taskInstance.getOutput();
+            if (output == null) {
+                output = new HashMap<>();
+                taskInstance.setOutput(output);
+            }
+            output.put(FAILED_BRANCH_KEY, failedBranchTask);
+            taskInstance.setStatus(TaskStatus.FAILED);
+            taskInstance.setReasonForNotCompleting(
+                    "Parallel branch failed (FAIL_FAST): " + failedBranchTask);
+            return true;
+        }
+
+        if (!allTerminal) {
+            // Still waiting for branches; don't mark as executed.
+            return false;
+        }
+
+        // All branches complete.
+        if (anyFailed) {
+            // WAIT_ALL policy: all done but some failed.
+            Map<String, Object> output = taskInstance.getOutput();
+            if (output == null) {
+                output = new HashMap<>();
+                taskInstance.setOutput(output);
+            }
+            output.put(FAILED_BRANCH_KEY, failedBranchTask);
+            taskInstance.setStatus(TaskStatus.FAILED);
+            taskInstance.setReasonForNotCompleting(
+                    "Parallel branch(es) failed (WAIT_ALL): " + failedBranchTask);
+        } else {
+            // Aggregate branch outputs.
+            aggregateBranchOutputs(currentFlow, taskInstance, subTaskIds);
+            taskInstance.setStatus(TaskStatus.COMPLETED);
+        }
+
         return true;
     }
 
@@ -204,16 +338,12 @@ public class ParallelTask implements FlowTask {
             return null;
         }
 
+        // When the target is the PARALLEL task itself (self-reference from decide()),
+        // we should NOT return any branch entry task — branches are already scheduled
+        // by getMappedTasks(). Return null so the flow proceeds past PARALLEL when done.
         if (toBeSearched == target
                 || toBeSearched.getName().equals(target.getName())) {
-            // Starting the parallel task: return the first task of the first branch.
-            // The executor will detect PARALLEL type and schedule all branches' first tasks.
-            // Here we just need to return the first child of branch 0 so the executor
-            // can find the entry point.
-            TaskDef firstBranchFirstTask = createBranchTaskDef(
-                    branches.get(0).getTasks().get(0), 0);
-            output.put(INNER_LAST_TASK, firstBranchFirstTask.getName());
-            return firstBranchFirstTask;
+            return null;
         }
 
         // Find which branch the target belongs to.
@@ -239,7 +369,6 @@ public class ParallelTask implements FlowTask {
 
     /**
      * Returns the first TaskDef for each branch, with branch-specific name suffixes.
-     * This is called by the executor to get all parallel branch entry points.
      */
     public List<TaskDef> getBranchEntryTasks(TaskDef taskDef) {
         List<Branch> branches = getBranches(taskDef);
@@ -252,6 +381,21 @@ public class ParallelTask implements FlowTask {
             }
         }
         return entryTasks;
+    }
+
+    @Override
+    public void cancel(TaskInstance taskInstance) {
+        if (taskInstance.getStatus().isTerminal()) {
+            return;
+        }
+        taskInstance.setStatus(TaskStatus.CANCELED);
+
+        // Also cancel child branch tasks if flow context is available.
+        FlowInstance currentFlow = FlowContext.getCurrentFlow();
+        if (currentFlow != null
+                && CollectionUtils.isNotEmpty(taskInstance.getSubTaskIds())) {
+            cancelRemainingBranches(currentFlow, taskInstance.getSubTaskIds());
+        }
     }
 
     /**
@@ -285,6 +429,120 @@ public class ParallelTask implements FlowTask {
             }
         }
         return branches;
+    }
+
+    // ========================================================================
+    // Internal helpers
+    // ========================================================================
+
+    /**
+     * Checks whether all branch chains (from entry to last task) have reached
+     * a terminal status. A "branch chain" is the sequence of tasks that follow
+     * from a branch entry task within the PARALLEL task's scope.
+     */
+    private boolean allBranchChainsTerminal(
+            final FlowInstance currentFlow,
+            final TaskInstance parallelTask,
+            final List<String> subTaskIds) {
+
+        for (String subTaskId : subTaskIds) {
+            Optional<TaskInstance> subTaskOpt = currentFlow.getTaskById(subTaskId);
+            if (!subTaskOpt.isPresent()) {
+                return false;
+            }
+
+            TaskInstance subTask = subTaskOpt.get();
+            if (!subTask.getStatus().isTerminal()) {
+                return false;
+            }
+
+            // Check if there are further tasks in this branch that
+            // haven't completed yet. We look for tasks whose name contains
+            // the same branch suffix.
+            int branchIndex = extractBranchIndex(subTask.getTaskName());
+            if (branchIndex >= 0) {
+                String branchSuffix = TaskConstants.PARALLEL_INDEX_SEPARATOR + branchIndex;
+                boolean hasPendingBranchTask = currentFlow.getTaskInstances().stream()
+                        .filter(t -> t.getTaskName().endsWith(branchSuffix))
+                        .anyMatch(t -> !t.getStatus().isTerminal());
+                if (hasPendingBranchTask) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Cancels all non-terminal branch tasks.
+     */
+    private void cancelRemainingBranches(
+            final FlowInstance currentFlow,
+            final List<String> subTaskIds) {
+
+        // Collect all branch suffixes from sub-task entries.
+        Set<String> branchSuffixes = new HashSet<>();
+        for (String subTaskId : subTaskIds) {
+            currentFlow.getTaskById(subTaskId).ifPresent(task -> {
+                int idx = extractBranchIndex(task.getTaskName());
+                if (idx >= 0) {
+                    branchSuffixes.add(
+                            TaskConstants.PARALLEL_INDEX_SEPARATOR + idx);
+                }
+            });
+        }
+
+        // Cancel all non-terminal tasks belonging to any of these branches.
+        for (TaskInstance task : currentFlow.getTaskInstances()) {
+            if (!task.getStatus().isTerminal()) {
+                for (String suffix : branchSuffixes) {
+                    if (task.getTaskName().endsWith(suffix)) {
+                        task.setStatus(TaskStatus.CANCELED);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Aggregates branch outputs into the PARALLEL task's output.
+     */
+    @SuppressWarnings("unchecked")
+    private void aggregateBranchOutputs(
+            final FlowInstance currentFlow,
+            final TaskInstance parallelTask,
+            final List<String> subTaskIds) {
+
+        Map<String, Object> output = parallelTask.getOutput();
+        if (output == null) {
+            output = new HashMap<>();
+            parallelTask.setOutput(output);
+        }
+
+        Map<String, Object> branchOutputs =
+                (Map<String, Object>) output.computeIfAbsent(
+                        BRANCH_OUTPUTS_KEY, k -> new HashMap<>());
+
+        List<Branch> branches = getBranches(parallelTask.getTaskDef());
+
+        for (int i = 0; i < branches.size() && i < subTaskIds.size(); i++) {
+            Branch branch = branches.get(i);
+            String branchSuffix = TaskConstants.PARALLEL_INDEX_SEPARATOR + i;
+
+            // Find the last terminal task in this branch.
+            TaskInstance lastTask = null;
+            for (TaskInstance task : currentFlow.getTaskInstances()) {
+                if (task.getTaskName().endsWith(branchSuffix)
+                        && task.getStatus().isTerminal()) {
+                    lastTask = task;
+                }
+            }
+
+            if (lastTask != null) {
+                branchOutputs.put(branch.getName(), lastTask.getOutput());
+            }
+        }
     }
 
     /**

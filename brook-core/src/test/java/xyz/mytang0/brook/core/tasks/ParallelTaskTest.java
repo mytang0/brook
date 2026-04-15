@@ -46,14 +46,146 @@ public class ParallelTaskTest {
     }
 
     @Test
-    public void testExecute() {
+    public void testExecuteCompletesWhenNoSubTasks() {
+        TaskDef taskDef = createParallelTaskDef();
         TaskInstance taskInstance = new TaskInstance();
+        taskInstance.setTaskDef(taskDef);
         taskInstance.setStatus(TaskStatus.SCHEDULED);
+        // No subTaskIds = immediate completion
+        taskInstance.setSubTaskIds(null);
 
         boolean result = parallelTask.execute(taskInstance);
 
         Assert.assertTrue(result);
         Assert.assertEquals(TaskStatus.COMPLETED, taskInstance.getStatus());
+    }
+
+    @Test
+    public void testExecuteReturnsFalseWhenBranchesPending() {
+        TaskDef taskDef = createParallelTaskDef();
+
+        FlowInstance flowInstance = new FlowInstance();
+        flowInstance.setFlowId("flow-1");
+        flowInstance.setTaskInstances(new ArrayList<>());
+
+        // Create the parallel task
+        TaskInstance parallelTaskInstance = new TaskInstance();
+        parallelTaskInstance.setTaskId("parallel-1");
+        parallelTaskInstance.setTaskName("parallelTask");
+        parallelTaskInstance.setTaskDef(taskDef);
+        parallelTaskInstance.setStatus(TaskStatus.SCHEDULED);
+        parallelTaskInstance.setOutput(new HashMap<>());
+
+        // Create a branch entry task that is still IN_PROGRESS
+        TaskInstance branchTask = new TaskInstance();
+        branchTask.setTaskId("branch-1");
+        branchTask.setTaskName("taskA1" + TaskConstants.PARALLEL_INDEX_SEPARATOR + "0");
+        branchTask.setStatus(TaskStatus.IN_PROGRESS);
+
+        List<String> subTaskIds = new ArrayList<>();
+        subTaskIds.add("branch-1");
+        parallelTaskInstance.setSubTaskIds(subTaskIds);
+
+        flowInstance.getTaskInstances().add(parallelTaskInstance);
+        flowInstance.getTaskInstances().add(branchTask);
+
+        FlowContext.setCurrentFlow(flowInstance);
+        try {
+            boolean result = parallelTask.execute(parallelTaskInstance);
+            // Branch is still running, so should return false
+            Assert.assertFalse(result);
+        } finally {
+            FlowContext.removeCurrentFlow();
+        }
+    }
+
+    @Test
+    public void testExecuteCompletesWhenAllBranchesTerminal() {
+        TaskDef taskDef = createParallelTaskDef();
+
+        FlowInstance flowInstance = new FlowInstance();
+        flowInstance.setFlowId("flow-1");
+        flowInstance.setTaskInstances(new ArrayList<>());
+
+        TaskInstance parallelTaskInstance = new TaskInstance();
+        parallelTaskInstance.setTaskId("parallel-1");
+        parallelTaskInstance.setTaskName("parallelTask");
+        parallelTaskInstance.setTaskDef(taskDef);
+        parallelTaskInstance.setStatus(TaskStatus.SCHEDULED);
+        parallelTaskInstance.setOutput(new HashMap<>());
+
+        TaskInstance branchA = new TaskInstance();
+        branchA.setTaskId("branch-a");
+        branchA.setTaskName("taskA1" + TaskConstants.PARALLEL_INDEX_SEPARATOR + "0");
+        branchA.setStatus(TaskStatus.COMPLETED);
+
+        TaskInstance branchB = new TaskInstance();
+        branchB.setTaskId("branch-b");
+        branchB.setTaskName("taskB1" + TaskConstants.PARALLEL_INDEX_SEPARATOR + "1");
+        branchB.setStatus(TaskStatus.COMPLETED);
+
+        List<String> subTaskIds = new ArrayList<>();
+        subTaskIds.add("branch-a");
+        subTaskIds.add("branch-b");
+        parallelTaskInstance.setSubTaskIds(subTaskIds);
+
+        flowInstance.getTaskInstances().add(parallelTaskInstance);
+        flowInstance.getTaskInstances().add(branchA);
+        flowInstance.getTaskInstances().add(branchB);
+
+        FlowContext.setCurrentFlow(flowInstance);
+        try {
+            boolean result = parallelTask.execute(parallelTaskInstance);
+            Assert.assertTrue(result);
+            Assert.assertEquals(TaskStatus.COMPLETED, parallelTaskInstance.getStatus());
+        } finally {
+            FlowContext.removeCurrentFlow();
+        }
+    }
+
+    @Test
+    public void testExecuteFailsFastOnBranchFailure() {
+        TaskDef taskDef = createParallelTaskDef(); // default FAIL_FAST
+
+        FlowInstance flowInstance = new FlowInstance();
+        flowInstance.setFlowId("flow-1");
+        flowInstance.setTaskInstances(new ArrayList<>());
+
+        TaskInstance parallelTaskInstance = new TaskInstance();
+        parallelTaskInstance.setTaskId("parallel-1");
+        parallelTaskInstance.setTaskName("parallelTask");
+        parallelTaskInstance.setTaskDef(taskDef);
+        parallelTaskInstance.setStatus(TaskStatus.SCHEDULED);
+        parallelTaskInstance.setOutput(new HashMap<>());
+
+        TaskInstance branchA = new TaskInstance();
+        branchA.setTaskId("branch-a");
+        branchA.setTaskName("taskA1" + TaskConstants.PARALLEL_INDEX_SEPARATOR + "0");
+        branchA.setStatus(TaskStatus.FAILED);
+
+        TaskInstance branchB = new TaskInstance();
+        branchB.setTaskId("branch-b");
+        branchB.setTaskName("taskB1" + TaskConstants.PARALLEL_INDEX_SEPARATOR + "1");
+        branchB.setStatus(TaskStatus.IN_PROGRESS);
+
+        List<String> subTaskIds = new ArrayList<>();
+        subTaskIds.add("branch-a");
+        subTaskIds.add("branch-b");
+        parallelTaskInstance.setSubTaskIds(subTaskIds);
+
+        flowInstance.getTaskInstances().add(parallelTaskInstance);
+        flowInstance.getTaskInstances().add(branchA);
+        flowInstance.getTaskInstances().add(branchB);
+
+        FlowContext.setCurrentFlow(flowInstance);
+        try {
+            boolean result = parallelTask.execute(parallelTaskInstance);
+            Assert.assertTrue(result);
+            Assert.assertEquals(TaskStatus.FAILED, parallelTaskInstance.getStatus());
+            Assert.assertNotNull(parallelTaskInstance.getReasonForNotCompleting());
+        } finally {
+            FlowContext.removeCurrentFlow();
+        }
     }
 
     @Test
@@ -68,7 +200,7 @@ public class ParallelTaskTest {
     }
 
     @Test
-    public void testGetMappedTasksReturnsSingleInstance() {
+    public void testGetMappedTasksReturnsParallelPlusBranchEntries() {
         TaskDef taskDef = createParallelTaskDef();
         FlowInstance flowInstance = new FlowInstance();
         flowInstance.setFlowId("flow-1");
@@ -82,10 +214,27 @@ public class ParallelTaskTest {
 
         List<TaskInstance> mappedTasks = parallelTask.getMappedTasks(context);
 
-        Assert.assertEquals(1, mappedTasks.size());
+        // Should return 3 tasks: 1 PARALLEL task + 2 branch entry tasks
+        Assert.assertEquals(3, mappedTasks.size());
+
+        // First task is the PARALLEL task itself
         TaskInstance parallelTaskInstance = mappedTasks.get(0);
         Assert.assertEquals("flow-1", parallelTaskInstance.getFlowId());
         Assert.assertNotNull(parallelTaskInstance.getOutput());
+        Assert.assertNotNull(parallelTaskInstance.getSubTaskIds());
+        Assert.assertEquals(2, parallelTaskInstance.getSubTaskIds().size());
+
+        // Second and third are branch entry tasks with parentTaskId set
+        TaskInstance branchA = mappedTasks.get(1);
+        TaskInstance branchB = mappedTasks.get(2);
+        Assert.assertEquals(parallelTaskInstance.getTaskId(), branchA.getParentTaskId());
+        Assert.assertEquals(parallelTaskInstance.getTaskId(), branchB.getParentTaskId());
+
+        // Branch names should have PARALLEL suffixes
+        Assert.assertTrue(branchA.getTaskName().contains(
+                TaskConstants.PARALLEL_INDEX_SEPARATOR + "0"));
+        Assert.assertTrue(branchB.getTaskName().contains(
+                TaskConstants.PARALLEL_INDEX_SEPARATOR + "1"));
     }
 
     @Test
@@ -191,7 +340,7 @@ public class ParallelTaskTest {
     }
 
     @Test
-    public void testNextWithSelfReference() {
+    public void testNextWithSelfReferenceReturnsNull() {
         TaskDef taskDef = createParallelTaskDef();
 
         // Set up flow context for next() method
@@ -212,13 +361,42 @@ public class ParallelTaskTest {
 
         try {
             TaskDef result = parallelTask.next(taskDef, taskDef);
-            Assert.assertNotNull(result);
-            // Should return the first task of the first branch with suffix
-            Assert.assertTrue(result.getName().contains(
-                    TaskConstants.PARALLEL_INDEX_SEPARATOR + "0"));
+            // In the new model, self-reference returns null because branch
+            // entry tasks are already scheduled by getMappedTasks().
+            Assert.assertNull(result);
         } finally {
             FlowContext.removeCurrentFlow();
         }
+    }
+
+    @Test
+    public void testSubTaskIdsLinkedCorrectly() {
+        TaskDef taskDef = createParallelTaskDef();
+        FlowInstance flowInstance = new FlowInstance();
+        flowInstance.setFlowId("flow-1");
+        flowInstance.setTaskInstances(new ArrayList<>());
+
+        TaskMapperContext context = TaskMapperContext.builder()
+                .taskDef(taskDef)
+                .flowInstance(flowInstance)
+                .input(taskDef.getInput())
+                .build();
+
+        List<TaskInstance> mappedTasks = parallelTask.getMappedTasks(context);
+
+        TaskInstance parallelTaskInstance = mappedTasks.get(0);
+        List<String> subTaskIds = parallelTaskInstance.getSubTaskIds();
+
+        // Verify subTaskIds match the branch entry task IDs
+        Assert.assertEquals(2, subTaskIds.size());
+        Assert.assertEquals(mappedTasks.get(1).getTaskId(), subTaskIds.get(0));
+        Assert.assertEquals(mappedTasks.get(2).getTaskId(), subTaskIds.get(1));
+
+        // Verify parentTaskId on branch entries
+        Assert.assertEquals(parallelTaskInstance.getTaskId(),
+                mappedTasks.get(1).getParentTaskId());
+        Assert.assertEquals(parallelTaskInstance.getTaskId(),
+                mappedTasks.get(2).getParentTaskId());
     }
 
     // Helper methods

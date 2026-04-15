@@ -9,7 +9,6 @@ import org.apache.commons.lang3.StringUtils;
 import xyz.mytang0.brook.common.configuration.Configuration;
 import xyz.mytang0.brook.common.constants.Delimiter;
 import xyz.mytang0.brook.common.context.FlowContext;
-import xyz.mytang0.brook.common.context.FlowContextSnapshot;
 import xyz.mytang0.brook.common.context.TaskMapperContext;
 import xyz.mytang0.brook.common.exception.BizException;
 import xyz.mytang0.brook.common.extension.ExtensionDirector;
@@ -41,7 +40,6 @@ import xyz.mytang0.brook.core.metadata.MetadataProperties;
 import xyz.mytang0.brook.core.monitor.DelayedTaskMonitor;
 import xyz.mytang0.brook.core.monitor.DelayedTaskMonitorProperties;
 import xyz.mytang0.brook.core.queue.QueueProperties;
-import xyz.mytang0.brook.core.tasks.ParallelTask;
 import xyz.mytang0.brook.spi.cache.FlowCache;
 import xyz.mytang0.brook.spi.cache.FlowCacheFactory;
 import xyz.mytang0.brook.spi.computing.EngineActuator;
@@ -64,13 +62,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import static java.util.Objects.requireNonNull;
@@ -83,7 +79,6 @@ import static xyz.mytang0.brook.core.exception.FlowErrorCode.FLOW_NOT_EXIST;
 import static xyz.mytang0.brook.core.exception.FlowErrorCode.TASK_NOT_EXIST;
 import static xyz.mytang0.brook.core.executor.ExecutorEnum.ASYNC_EXECUTOR;
 import static xyz.mytang0.brook.core.executor.ExecutorEnum.FLOW_STARTER;
-import static xyz.mytang0.brook.core.executor.ExecutorEnum.PARALLEL_EXECUTOR;
 import static xyz.mytang0.brook.core.utils.ParameterUtils.flowContext;
 import static xyz.mytang0.brook.core.utils.ParameterUtils.getFlowInput;
 import static xyz.mytang0.brook.core.utils.ParameterUtils.getFlowOutput;
@@ -109,8 +104,6 @@ public class FlowExecutor<T extends FlowTask> {
     private final ExecutorService flowStarter;
 
     private final ExecutorService asyncExecutor;
-
-    private final ExecutorService parallelExecutor;
 
     private final FlowCacheFactory flowCacheFactory;
 
@@ -151,10 +144,6 @@ public class FlowExecutor<T extends FlowTask> {
                 .getExtensionLoader(ExecutorFactory.class)
                 .getDefaultExtension()
                 .getExecutor(ASYNC_EXECUTOR);
-        this.parallelExecutor = ExtensionDirector
-                .getExtensionLoader(ExecutorFactory.class)
-                .getDefaultExtension()
-                .getExecutor(PARALLEL_EXECUTOR);
         this.queueProperties =
                 ConfiguratorFacade.getConfig(QueueProperties.class);
         this.executionProperties =
@@ -414,18 +403,12 @@ public class FlowExecutor<T extends FlowTask> {
 
         if (CollectionUtils.isNotEmpty(tasksToBeScheduled)) {
 
-            // Detect if these tasks originate from a PARALLEL task
-            // by checking if there are multiple tasks and they have parallel branch suffixes.
-            if (isParallelBatch(flowInstance, tasksToBeScheduled)) {
-                executeParallelBranches(flowInstance, tasksToBeScheduled, tasksToBeUpdated);
-            } else {
-                scheduleTasks(flowInstance, tasksToBeScheduled)
-                        .forEach(taskInstance -> {
-                            if (executeUnsafe(taskInstance)) {
-                                tasksToBeUpdated.add(taskInstance);
-                            }
-                        });
-            }
+            scheduleTasks(flowInstance, tasksToBeScheduled)
+                    .forEach(taskInstance -> {
+                        if (executeUnsafe(taskInstance)) {
+                            tasksToBeUpdated.add(taskInstance);
+                        }
+                    });
         }
 
         if (CollectionUtils.isNotEmpty(tasksToBeUpdated)) {
@@ -439,166 +422,6 @@ public class FlowExecutor<T extends FlowTask> {
         if (CollectionUtils.isNotEmpty(tasksToBeUpdated)) {
             executeUnsafe(flowInstance);
         }
-    }
-
-    /**
-     * Detects if a batch of tasks to be scheduled should be executed in parallel.
-     * This is the case when the tasks originate from a PARALLEL task type and
-     * contain tasks from multiple branches.
-     */
-    private boolean isParallelBatch(final FlowInstance flowInstance,
-                                    final List<TaskInstance> tasksToBeScheduled) {
-        if (tasksToBeScheduled.size() < 2) {
-            return false;
-        }
-
-        // Check if the tasks have parallel branch suffixes indicating
-        // they are from different branches of a PARALLEL task.
-        Set<Integer> branchIndices = new HashSet<>();
-        for (TaskInstance task : tasksToBeScheduled) {
-            int branchIndex = ParallelTask.extractBranchIndex(task.getTaskName());
-            if (branchIndex < 0) {
-                return false;
-            }
-            branchIndices.add(branchIndex);
-        }
-
-        // Multiple distinct branch indices = parallel batch
-        return branchIndices.size() > 1;
-    }
-
-    /**
-     * Executes parallel branch tasks concurrently using the parallel executor pool.
-     * Each branch task is executed in a separate thread with propagated FlowContext.
-     * Results are collected and merged back into the flow instance.
-     * <p>
-     * When parallelEnabled is false, falls back to sequential execution.
-     */
-    private void executeParallelBranches(final FlowInstance flowInstance,
-                                         final List<TaskInstance> tasksToBeScheduled,
-                                         final List<TaskInstance> tasksToBeUpdated) {
-
-        if (!executionProperties.isParallelEnabled()) {
-            // Fallback: execute sequentially
-            scheduleTasks(flowInstance, tasksToBeScheduled)
-                    .forEach(taskInstance -> {
-                        if (executeUnsafe(taskInstance)) {
-                            tasksToBeUpdated.add(taskInstance);
-                        }
-                    });
-            return;
-        }
-
-        // Determine failure policy from the parent PARALLEL task
-        ParallelTask.FailurePolicy failurePolicy = getParallelFailurePolicy(flowInstance);
-
-        // Schedule all tasks (persist to DAO)
-        List<TaskInstance> scheduledTasks = scheduleTasks(flowInstance, tasksToBeScheduled);
-        if (CollectionUtils.isEmpty(scheduledTasks)) {
-            return;
-        }
-
-        log.info("Executing {} parallel branches for flow: {}",
-                scheduledTasks.size(), flowInstance.getFlowId());
-
-        // Capture context for propagation to branch threads
-        FlowContextSnapshot snapshot = FlowContextSnapshot.capture();
-
-        // Track results from parallel branches
-        final List<TaskInstance> branchResults =
-                Collections.synchronizedList(new ArrayList<>());
-        final AtomicBoolean hasFailed = new AtomicBoolean(false);
-
-        // Submit each branch task as a CompletableFuture
-        @SuppressWarnings("unchecked")
-        CompletableFuture<Void>[] futures = scheduledTasks.stream()
-                .map(taskInstance -> CompletableFuture.runAsync(() -> {
-                    // Propagate context to this thread
-                    snapshot.apply();
-                    try {
-                        if (failurePolicy == ParallelTask.FailurePolicy.FAIL_FAST
-                                && hasFailed.get()) {
-                            // Skip execution if another branch already failed
-                            return;
-                        }
-
-                        boolean result = executeUnsafe(taskInstance);
-                        if (result) {
-                            branchResults.add(taskInstance);
-                        }
-
-                        // Check if this task failed
-                        if (taskInstance.getStatus() != null
-                                && taskInstance.getStatus().isUnsuccessfullyTerminated()) {
-                            hasFailed.set(true);
-                        }
-                    } catch (TerminateException e) {
-                        hasFailed.set(true);
-                        throw e;
-                    } catch (Throwable e) {
-                        hasFailed.set(true);
-                        log.error("Error executing parallel branch task: {} in flow: {}",
-                                taskInstance.getTaskName(), flowInstance.getFlowId(), e);
-                    } finally {
-                        snapshot.clear();
-                    }
-                }, parallelExecutor))
-                .toArray(CompletableFuture[]::new);
-
-        try {
-            if (failurePolicy == ParallelTask.FailurePolicy.FAIL_FAST) {
-                // Wait for all, but any exception propagates
-                CompletableFuture.allOf(futures).join();
-            } else {
-                // WAIT_ALL: wait for all to complete, log individual exceptions
-                for (CompletableFuture<Void> future : futures) {
-                    try {
-                        future.join();
-                    } catch (Throwable e) {
-                        log.warn("Branch execution failed (WAIT_ALL policy, continuing): {}",
-                                e.getMessage());
-                    }
-                }
-            }
-        } catch (Throwable e) {
-            // For FAIL_FAST, propagate the first failure
-            Throwable cause = e.getCause() != null ? e.getCause() : e;
-            if (cause instanceof TerminateException) {
-                throw (TerminateException) cause;
-            }
-            throw new TerminateException(
-                    "Parallel branch execution failed: " + cause.getMessage(),
-                    FlowStatus.FAILED);
-        }
-
-        // Merge all branch results into tasksToBeUpdated
-        tasksToBeUpdated.addAll(branchResults);
-
-        log.info("Completed {} parallel branches for flow: {}",
-                scheduledTasks.size(), flowInstance.getFlowId());
-    }
-
-    /**
-     * Resolves the failure policy for the current PARALLEL task in the flow.
-     */
-    private ParallelTask.FailurePolicy getParallelFailurePolicy(final FlowInstance flowInstance) {
-        if (CollectionUtils.isEmpty(flowInstance.getTaskInstances())) {
-            return ParallelTask.FailurePolicy.FAIL_FAST;
-        }
-
-        // Find the most recent PARALLEL task instance
-        for (int i = flowInstance.getTaskInstances().size() - 1; i >= 0; i--) {
-            TaskInstance task = flowInstance.getTaskInstances().get(i);
-            if (task.getTaskDef() != null
-                    && "PARALLEL".equals(task.getTaskDef().getType())) {
-                T flowTask = flowTaskRegistry.getFlowTask("PARALLEL");
-                if (flowTask instanceof ParallelTask) {
-                    return ((ParallelTask) flowTask).getFailurePolicy(task.getTaskDef());
-                }
-            }
-        }
-
-        return ParallelTask.FailurePolicy.FAIL_FAST;
     }
 
     private void terminate(String flowId, TerminateException throwable) {
@@ -1126,18 +949,13 @@ public class FlowExecutor<T extends FlowTask> {
 
                     } else {
                         Optional.ofNullable(getNextTask(flowInstance, pendingTask.getTaskDef()))
-                                .ifPresent(nextTaskDef -> {
-                                    getMappedTasks(flowInstance, nextTaskDef).forEach(
-                                            taskInstance -> tasksToBeScheduled.putIfAbsent(
-                                                    taskInstance.getTaskName(), taskInstance
-                                            )
-                                    );
-                                    // If the next task is from a PARALLEL task,
-                                    // also schedule all other branch entry tasks.
-                                    scheduleParallelSiblingBranches(
-                                            flowInstance, pendingTask.getTaskDef(),
-                                            nextTaskDef, tasksToBeScheduled);
-                                });
+                                .ifPresent(nextTaskDef ->
+                                        getMappedTasks(flowInstance, nextTaskDef).forEach(
+                                                taskInstance -> tasksToBeScheduled.putIfAbsent(
+                                                        taskInstance.getTaskName(), taskInstance
+                                                )
+                                        )
+                                );
                     }
 
                     result.getTasksToBeUpdated().add(pendingTask);
@@ -1163,62 +981,6 @@ public class FlowExecutor<T extends FlowTask> {
         }
 
         return result;
-    }
-
-    /**
-     * When the next task returned by getNextTask() is a child of a PARALLEL task,
-     * this method schedules the entry tasks for all OTHER branches of the same
-     * PARALLEL task. This enables the executor to detect a parallel batch and
-     * dispatch branches concurrently.
-     */
-    private void scheduleParallelSiblingBranches(
-            final FlowInstance flowInstance,
-            final TaskDef completedTaskDef,
-            final TaskDef nextTaskDef,
-            final Map<String, TaskInstance> tasksToBeScheduled) {
-
-        // Check if the nextTaskDef has a PARALLEL branch suffix
-        int branchIndex = ParallelTask.extractBranchIndex(nextTaskDef.getName());
-        if (branchIndex < 0) {
-            return;
-        }
-
-        // Find the parent PARALLEL TaskDef in the flow definition
-        FlowDef flowDef = flowInstance.getFlowDef();
-        if (flowDef == null || flowDef.getTaskDefs() == null) {
-            return;
-        }
-
-        for (TaskDef taskDef : flowDef.getTaskDefs()) {
-            if ("PARALLEL".equals(taskDef.getType())) {
-                T flowTask = flowTaskRegistry.getFlowTask("PARALLEL");
-                if (flowTask instanceof ParallelTask) {
-                    ParallelTask parallelTask = (ParallelTask) flowTask;
-                    List<TaskDef> branchEntryTasks = parallelTask.getBranchEntryTasks(taskDef);
-
-                    // Verify this is the correct parent PARALLEL task by checking
-                    // that nextTaskDef matches one of its branch entry tasks.
-                    boolean isParentOfNext = branchEntryTasks.stream()
-                            .anyMatch(entry -> entry.getName().equals(nextTaskDef.getName()));
-                    if (!isParentOfNext) {
-                        continue;
-                    }
-
-                    // Schedule all branch entry tasks that aren't already scheduled
-                    for (TaskDef entryTask : branchEntryTasks) {
-                        if (!entryTask.getName().equals(nextTaskDef.getName())
-                                && !tasksToBeScheduled.containsKey(entryTask.getName())) {
-                            getMappedTasks(flowInstance, entryTask).forEach(
-                                    taskInstance -> tasksToBeScheduled.putIfAbsent(
-                                            taskInstance.getTaskName(), taskInstance
-                                    )
-                            );
-                        }
-                    }
-                    return;
-                }
-            }
-        }
     }
 
     public List<TaskInstance> getMappedTasks(final FlowInstance flowInstance,

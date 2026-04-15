@@ -4,7 +4,5 @@ public enum ExecutorEnum {
 
     FLOW_STARTER,
 
-    ASYNC_EXECUTOR,
-
-    PARALLEL_EXECUTOR
+    ASYNC_EXECUTOR
 }

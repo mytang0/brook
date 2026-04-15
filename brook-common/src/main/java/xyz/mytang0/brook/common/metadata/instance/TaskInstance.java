@@ -12,6 +12,8 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import lombok.Data;
 
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -41,6 +43,8 @@ public class TaskInstance implements Serializable {
     private String subFlowId;
 
     private String parentTaskId;
+
+    private List<String> subTaskIds;
 
     private String hangTaskId;
 
@@ -108,6 +112,7 @@ public class TaskInstance implements Serializable {
         copy.setOutput(output);
         copy.setSubFlowId(subFlowId);
         copy.setParentTaskId(parentTaskId);
+        copy.setSubTaskIds(subTaskIds != null ? new ArrayList<>(subTaskIds) : null);
         copy.setHangTaskId(hangTaskId);
         copy.setProgress(progress);
         copy.setLink(link);
