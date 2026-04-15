@@ -54,10 +54,18 @@ public class ParallelTaskTest {
         // No subTaskIds = immediate completion
         taskInstance.setSubTaskIds(null);
 
-        boolean result = parallelTask.execute(taskInstance);
+        FlowInstance flowInstance = new FlowInstance();
+        flowInstance.setFlowId("flow-1");
+        flowInstance.setTaskInstances(new ArrayList<>());
+        FlowContext.setCurrentFlow(flowInstance);
+        try {
+            boolean result = parallelTask.execute(taskInstance);
 
-        Assert.assertTrue(result);
-        Assert.assertEquals(TaskStatus.COMPLETED, taskInstance.getStatus());
+            Assert.assertTrue(result);
+            Assert.assertEquals(TaskStatus.COMPLETED, taskInstance.getStatus());
+        } finally {
+            FlowContext.removeCurrentFlow();
+        }
     }
 
     @Test

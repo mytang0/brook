@@ -189,9 +189,9 @@ public class ParallelTask implements FlowTask {
 
         FlowInstance currentFlow = FlowContext.getCurrentFlow();
         if (currentFlow == null) {
-            // Can't determine branch status without flow context
-            taskInstance.setStatus(TaskStatus.COMPLETED);
-            return true;
+            throw new IllegalStateException(
+                    "FlowContext.getCurrentFlow() must not be null when executing PARALLEL task. "
+                            + "Ensure FlowContext is properly set before executing.");
         }
 
         List<String> subTaskIds = taskInstance.getSubTaskIds();
