@@ -4,3 +4,4 @@ SUB_FLOW=xyz.mytang0.brook.core.tasks.SubFlowTask
 COMPUTING=xyz.mytang0.brook.core.tasks.ComputingTask
 WAIT=xyz.mytang0.brook.core.tasks.WaitTask
 LOOP=xyz.mytang0.brook.core.tasks.LoopTask
+PARALLEL=xyz.mytang0.brook.core.tasks.ParallelTask

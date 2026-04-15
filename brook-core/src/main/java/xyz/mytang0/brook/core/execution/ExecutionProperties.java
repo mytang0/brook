@@ -11,4 +11,10 @@ public class ExecutionProperties {
      * The protocol of the execution-dao.
      */
     private String protocol;
+
+    /**
+     * Whether parallel task execution is enabled.
+     * When false, PARALLEL task branches execute sequentially.
+     */
+    private boolean parallelEnabled = true;
 }
