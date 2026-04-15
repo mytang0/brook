@@ -1,0 +1,36 @@
+{
+  "name": "test-loop",
+  "description": "Loop task demo - iterates over a list and processes each item. Child task names are automatically suffixed with __LOOP_<index> per iteration (e.g., processItem__LOOP_0, processItem__LOOP_1) to ensure uniqueness. Loop-body tasks can reference sibling tasks by their original (unsuffixed) names, e.g. ${processItem.output}.",
+  "taskDefs": [
+    {
+      "type": "LOOP",
+      "name": "loopItems",
+      "input": {
+        "loopOver": "${flow.input.items}",
+        "loopBody": [
+          {
+            "type": "COMPUTING",
+            "name": "processItem",
+            "input": {
+              "source": "${loopItems.output.currentItem}"
+            }
+          },
+          {
+            "type": "COMPUTING",
+            "name": "formatItem",
+            "input": {
+              "source": "${processItem.output}"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "COMPUTING",
+      "name": "compute",
+      "input": {
+        "source": "${loopItems.output.iterations}"
+      }
+    }
+  ]
+}
