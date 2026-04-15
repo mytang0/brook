@@ -348,7 +348,7 @@ public class ParallelTaskTest {
     }
 
     @Test
-    public void testNextWithSelfReferenceReturnsNull() {
+    public void testNextWithSelfReferenceReturnsMatched() {
         TaskDef taskDef = createParallelTaskDef();
 
         // Set up flow context for next() method
@@ -369,9 +369,115 @@ public class ParallelTaskTest {
 
         try {
             TaskDef result = parallelTask.next(taskDef, taskDef);
-            // In the new model, self-reference returns null because branch
-            // entry tasks are already scheduled by getMappedTasks().
-            Assert.assertNull(result);
+            // Self-reference must return MATCHED so FlowExecutor's iterator
+            // correctly advances to the next sibling task after PARALLEL.
+            Assert.assertSame(TaskDef.MATCHED, result);
+        } finally {
+            FlowContext.removeCurrentFlow();
+        }
+    }
+
+    @Test
+    public void testCancelCallsTaskCancelNotJustStatus() {
+        // When canceling branches with FAIL_FAST, the cancel should
+        // properly cancel each task (not just set status directly).
+        // Without flowExecutor, it falls back to setting status, but
+        // still goes through the cancelTask path.
+        TaskDef taskDef = createParallelTaskDef();
+
+        FlowInstance flowInstance = new FlowInstance();
+        flowInstance.setFlowId("flow-1");
+        flowInstance.setTaskInstances(new ArrayList<>());
+
+        TaskInstance parallelTaskInstance = new TaskInstance();
+        parallelTaskInstance.setTaskId("parallel-1");
+        parallelTaskInstance.setTaskName("parallelTask");
+        parallelTaskInstance.setTaskDef(taskDef);
+        parallelTaskInstance.setStatus(TaskStatus.IN_PROGRESS);
+        parallelTaskInstance.setOutput(new HashMap<>());
+
+        TaskDef branchADef = new TaskDef();
+        branchADef.setName("taskA1" + TaskConstants.PARALLEL_INDEX_SEPARATOR + "0");
+        branchADef.setType("COMPUTING");
+
+        TaskInstance branchA = new TaskInstance();
+        branchA.setTaskId("branch-a");
+        branchA.setTaskName("taskA1" + TaskConstants.PARALLEL_INDEX_SEPARATOR + "0");
+        branchA.setTaskDef(branchADef);
+        branchA.setStatus(TaskStatus.FAILED);
+
+        TaskDef branchBDef = new TaskDef();
+        branchBDef.setName("taskB1" + TaskConstants.PARALLEL_INDEX_SEPARATOR + "1");
+        branchBDef.setType("COMPUTING");
+
+        TaskInstance branchB = new TaskInstance();
+        branchB.setTaskId("branch-b");
+        branchB.setTaskName("taskB1" + TaskConstants.PARALLEL_INDEX_SEPARATOR + "1");
+        branchB.setTaskDef(branchBDef);
+        branchB.setStatus(TaskStatus.IN_PROGRESS);
+
+        List<String> subTaskIds = new ArrayList<>();
+        subTaskIds.add("branch-a");
+        subTaskIds.add("branch-b");
+        parallelTaskInstance.setSubTaskIds(subTaskIds);
+
+        flowInstance.getTaskInstances().add(parallelTaskInstance);
+        flowInstance.getTaskInstances().add(branchA);
+        flowInstance.getTaskInstances().add(branchB);
+
+        FlowContext.setCurrentFlow(flowInstance);
+        try {
+            // Execute with FAIL_FAST should cancel remaining branches
+            boolean result = parallelTask.execute(parallelTaskInstance);
+            Assert.assertTrue(result);
+            Assert.assertEquals(TaskStatus.FAILED, parallelTaskInstance.getStatus());
+
+            // branchB should have been canceled (via cancelTask path)
+            Assert.assertEquals(TaskStatus.CANCELED, branchB.getStatus());
+        } finally {
+            FlowContext.removeCurrentFlow();
+        }
+    }
+
+    @Test
+    public void testCancelPropagatesViaFlowTaskCancel() {
+        // ParallelTask.cancel() should cancel child branch tasks
+        TaskDef taskDef = createParallelTaskDef();
+
+        FlowInstance flowInstance = new FlowInstance();
+        flowInstance.setFlowId("flow-1");
+        flowInstance.setTaskInstances(new ArrayList<>());
+
+        TaskInstance parallelTaskInstance = new TaskInstance();
+        parallelTaskInstance.setTaskId("parallel-1");
+        parallelTaskInstance.setTaskName("parallelTask");
+        parallelTaskInstance.setTaskDef(taskDef);
+        parallelTaskInstance.setStatus(TaskStatus.IN_PROGRESS);
+
+        TaskDef branchDef = new TaskDef();
+        branchDef.setName("taskA1" + TaskConstants.PARALLEL_INDEX_SEPARATOR + "0");
+        branchDef.setType("COMPUTING");
+
+        TaskInstance branchTask = new TaskInstance();
+        branchTask.setTaskId("branch-1");
+        branchTask.setTaskName("taskA1" + TaskConstants.PARALLEL_INDEX_SEPARATOR + "0");
+        branchTask.setTaskDef(branchDef);
+        branchTask.setStatus(TaskStatus.IN_PROGRESS);
+
+        List<String> subTaskIds = new ArrayList<>();
+        subTaskIds.add("branch-1");
+        parallelTaskInstance.setSubTaskIds(subTaskIds);
+
+        flowInstance.getTaskInstances().add(parallelTaskInstance);
+        flowInstance.getTaskInstances().add(branchTask);
+
+        FlowContext.setCurrentFlow(flowInstance);
+        try {
+            parallelTask.cancel(parallelTaskInstance);
+
+            Assert.assertEquals(TaskStatus.CANCELED, parallelTaskInstance.getStatus());
+            // Child branch task should also be canceled
+            Assert.assertEquals(TaskStatus.CANCELED, branchTask.getStatus());
         } finally {
             FlowContext.removeCurrentFlow();
         }

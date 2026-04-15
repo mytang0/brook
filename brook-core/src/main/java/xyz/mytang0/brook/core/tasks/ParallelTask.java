@@ -339,11 +339,12 @@ public class ParallelTask implements FlowTask {
         }
 
         // When the target is the PARALLEL task itself (self-reference from decide()),
-        // we should NOT return any branch entry task — branches are already scheduled
-        // by getMappedTasks(). Return null so the flow proceeds past PARALLEL when done.
+        // return MATCHED so the iterator pattern in FlowExecutor.getNextTask() correctly
+        // advances to the next sibling task. Branch entry tasks are already scheduled
+        // by getMappedTasks(), so we don't return a branch task here.
         if (toBeSearched == target
                 || toBeSearched.getName().equals(target.getName())) {
-            return null;
+            return TaskDef.MATCHED;
         }
 
         // Find which branch the target belongs to.
@@ -474,7 +475,10 @@ public class ParallelTask implements FlowTask {
     }
 
     /**
-     * Cancels all non-terminal branch tasks.
+     * Cancels all non-terminal branch tasks by delegating to each task's own
+     * FlowTask.cancel() method. This ensures that nested control-flow tasks
+     * (e.g., sub-flows, nested PARALLEL or LOOP tasks) are properly cleaned up
+     * rather than just having their status changed directly.
      */
     private void cancelRemainingBranches(
             final FlowInstance currentFlow,
@@ -492,16 +496,38 @@ public class ParallelTask implements FlowTask {
             });
         }
 
-        // Cancel all non-terminal tasks belonging to any of these branches.
+        // Cancel all non-terminal tasks belonging to any of these branches
+        // by calling each task type's cancel() method (via FlowTask SPI).
         for (TaskInstance task : currentFlow.getTaskInstances()) {
             if (!task.getStatus().isTerminal()) {
                 for (String suffix : branchSuffixes) {
                     if (task.getTaskName().endsWith(suffix)) {
-                        task.setStatus(TaskStatus.CANCELED);
+                        cancelTask(task);
                         break;
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Cancels a single task by looking up its FlowTask implementation and
+     * calling cancel(). Falls back to direct status change if the FlowTask
+     * registry is not available (e.g., in unit tests without FlowExecutor).
+     */
+    private void cancelTask(TaskInstance task) {
+        if (flowExecutor != null && task.getTaskDef() != null) {
+            try {
+                FlowTask flowTask = flowExecutor.getFlowTaskRegistry()
+                        .getFlowTask(task.getTaskDef().getType());
+                flowTask.cancel(task);
+                return;
+            } catch (Exception e) {
+                // Fall back to direct status change
+            }
+        }
+        if (!task.getStatus().isTerminal()) {
+            task.setStatus(TaskStatus.CANCELED);
         }
     }
 

@@ -158,6 +158,10 @@ public class FlowExecutor<T extends FlowTask> {
         this.rateLimiterFactory = new RateLimiterFactory(rateLimiterProperties);
     }
 
+    public FlowTaskRegistry<T> getFlowTaskRegistry() {
+        return flowTaskRegistry;
+    }
+
     public String startFlow(StartFlowReq startFlowReq) {
         if (startFlowReq.getFlowDef() == null) {
             requireNonNull(startFlowReq.getName(),
