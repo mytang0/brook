@@ -149,6 +149,14 @@ public class ParallelTaskTest {
     }
 
     @Test
+    public void testGetFailurePolicyNull() {
+        // TaskDef with no failurePolicy key at all
+        TaskDef taskDef = createParallelTaskDef();
+        ParallelTask.FailurePolicy policy = parallelTask.getFailurePolicy(taskDef);
+        Assert.assertEquals(ParallelTask.FailurePolicy.FAIL_FAST, policy);
+    }
+
+    @Test
     public void testBranchTaskNameUniqueness() {
         TaskDef taskDef = createParallelTaskDefWithSameChildNames();
 

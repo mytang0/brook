@@ -550,12 +550,13 @@ public class FlowExecutor<T extends FlowTask> {
                 // Wait for all, but any exception propagates
                 CompletableFuture.allOf(futures).join();
             } else {
-                // WAIT_ALL: wait for all to complete, swallow individual exceptions
+                // WAIT_ALL: wait for all to complete, log individual exceptions
                 for (CompletableFuture<Void> future : futures) {
                     try {
                         future.join();
-                    } catch (Throwable ignored) {
-                        // Collect all results, report aggregated failure later
+                    } catch (Throwable e) {
+                        log.warn("Branch execution failed (WAIT_ALL policy, continuing): {}",
+                                e.getMessage());
                     }
                 }
             }
@@ -1194,6 +1195,14 @@ public class FlowExecutor<T extends FlowTask> {
                 if (flowTask instanceof ParallelTask) {
                     ParallelTask parallelTask = (ParallelTask) flowTask;
                     List<TaskDef> branchEntryTasks = parallelTask.getBranchEntryTasks(taskDef);
+
+                    // Verify this is the correct parent PARALLEL task by checking
+                    // that nextTaskDef matches one of its branch entry tasks.
+                    boolean isParentOfNext = branchEntryTasks.stream()
+                            .anyMatch(entry -> entry.getName().equals(nextTaskDef.getName()));
+                    if (!isParentOfNext) {
+                        continue;
+                    }
 
                     // Schedule all branch entry tasks that aren't already scheduled
                     for (TaskDef entryTask : branchEntryTasks) {
