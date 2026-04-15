@@ -346,8 +346,9 @@ public class ParallelTask implements FlowTask {
             return TaskDef.MATCHED;
         }
 
-        // Fast path: if target is a configured top-level branch task, locate branch directly.
-        Branch indexedBranch = parsedConfig.getTopLevelTaskToBranch().get(target.getName());
+        // Fast path: if target task name is indexed to a branch, locate branch directly.
+        // (This index includes configured branch tasks by name.)
+        Branch indexedBranch = parsedConfig.getTaskNameToBranch().get(target.getName());
         if (indexedBranch != null) {
             return findNextTaskFromChildren(indexedBranch.getTasks(), target);
         }
@@ -423,13 +424,13 @@ public class ParallelTask implements FlowTask {
                             }
                     );
 
-                    Map<String, Branch> topLevelTaskToBranch = new LinkedHashMap<>();
+                    Map<String, Branch> taskNameToBranch = new LinkedHashMap<>();
                     Set<String> allBranchTaskNames = new HashSet<>();
                     for (Branch branch : branches) {
                         if (CollectionUtils.isNotEmpty(branch.getTasks())) {
                             for (TaskDef branchTask : branch.getTasks()) {
                                 allBranchTaskNames.add(branchTask.getName());
-                                topLevelTaskToBranch.putIfAbsent(branchTask.getName(), branch);
+                                taskNameToBranch.putIfAbsent(branchTask.getName(), branch);
                             }
                         }
                     }
@@ -437,7 +438,7 @@ public class ParallelTask implements FlowTask {
                     parsedConfig = new ParsedConfig(
                             branches,
                             Collections.unmodifiableSet(allBranchTaskNames),
-                            Collections.unmodifiableMap(topLevelTaskToBranch)
+                            Collections.unmodifiableMap(taskNameToBranch)
                     );
                     taskDef.setParsed(parsedConfig);
                 }
@@ -541,10 +542,6 @@ public class ParallelTask implements FlowTask {
             final List<TaskDef> children,
             final TaskDef target) {
 
-        if (flowExecutor == null) {
-            throw new IllegalStateException("flowExecutor is not initialized for PARALLEL task");
-        }
-
         Iterator<TaskDef> iterator = children.iterator();
 
         while (iterator.hasNext()) {
@@ -612,6 +609,6 @@ public class ParallelTask implements FlowTask {
 
         private final Set<String> allBranchTaskNames;
 
-        private final Map<String, Branch> topLevelTaskToBranch;
+        private final Map<String, Branch> taskNameToBranch;
     }
 }
