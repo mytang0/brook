@@ -158,10 +158,6 @@ public class FlowExecutor<T extends FlowTask> {
         this.rateLimiterFactory = new RateLimiterFactory(rateLimiterProperties);
     }
 
-    public FlowTaskRegistry<T> getFlowTaskRegistry() {
-        return flowTaskRegistry;
-    }
-
     public String startFlow(StartFlowReq startFlowReq) {
         if (startFlowReq.getFlowDef() == null) {
             requireNonNull(startFlowReq.getName(),
@@ -1125,6 +1121,28 @@ public class FlowExecutor<T extends FlowTask> {
         }
 
         return errorTasks;
+    }
+
+    /**
+     * Cancels a single task by looking up its FlowTask implementation and
+     * calling {@link FlowTask#cancel(TaskInstance)}.
+     * <p>
+     * This method is intended for use by composite tasks (e.g., PARALLEL)
+     * that need to cancel their child tasks properly, ensuring that nested
+     * control-flow tasks (sub-flows, nested PARALLEL/LOOP) are cleaned up
+     * through their own cancel logic.
+     */
+    public void cancelTask(final TaskInstance taskInstance) {
+        final TaskDef taskDef = taskInstance.getTaskDef();
+        if (taskDef == null) {
+            if (!taskInstance.getStatus().isTerminal()) {
+                taskInstance.setStatus(TaskStatus.CANCELED);
+            }
+            return;
+        }
+
+        T flowTask = flowTaskRegistry.getFlowTask(taskDef.getType());
+        flowTask.cancel(taskInstance);
     }
 
     private boolean isCancellable(final TaskInstance taskInstance) {

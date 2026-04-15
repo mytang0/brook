@@ -1,0 +1,60 @@
+{
+  "name": "test-parallel",
+  "description": "Parallel task demo - executes multiple branches concurrently with a sequential task after completion.",
+  "taskDefs": [
+    {
+      "type": "COMPUTING",
+      "name": "prepare",
+      "input": {
+        "source": "prepare data"
+      }
+    },
+    {
+      "type": "PARALLEL",
+      "name": "parallelStep",
+      "input": {
+        "branches": [
+          {
+            "name": "branchA",
+            "tasks": [
+              {
+                "type": "COMPUTING",
+                "name": "taskA1",
+                "input": {
+                  "source": "branchA step1"
+                }
+              },
+              {
+                "type": "COMPUTING",
+                "name": "taskA2",
+                "input": {
+                  "source": "${taskA1.output}"
+                }
+              }
+            ]
+          },
+          {
+            "name": "branchB",
+            "tasks": [
+              {
+                "type": "COMPUTING",
+                "name": "taskB1",
+                "input": {
+                  "source": "branchB step1"
+                }
+              }
+            ]
+          }
+        ],
+        "failurePolicy": "FAIL_FAST"
+      }
+    },
+    {
+      "type": "COMPUTING",
+      "name": "aggregate",
+      "input": {
+        "source": "${parallelStep.output.branchOutputs}"
+      }
+    }
+  ]
+}

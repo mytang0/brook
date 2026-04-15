@@ -8,7 +8,6 @@ import org.apache.commons.collections4.CollectionUtils;
 import xyz.mytang0.brook.common.configuration.ConfigOption;
 import xyz.mytang0.brook.common.configuration.ConfigOptions;
 import xyz.mytang0.brook.common.configuration.Configuration;
-import xyz.mytang0.brook.common.constants.TaskConstants;
 import xyz.mytang0.brook.common.context.FlowContext;
 import xyz.mytang0.brook.common.context.TaskMapperContext;
 import xyz.mytang0.brook.common.metadata.definition.TaskDef;
@@ -23,9 +22,9 @@ import javax.validation.ValidationException;
 import javax.validation.constraints.NotNull;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -43,9 +42,10 @@ import java.util.Set;
  * state, the PARALLEL task itself completes. This design ensures that each branch
  * task can run on any node/instance independently.
  * <p>
- * Child task names are suffixed with {@code __PARALLEL_<branchIndex>}
- * per branch to ensure uniqueness across branches (FlowExecutor
- * deduplicates tasks by name).
+ * Unlike LoopTask, ParallelTask does <em>not</em> add a suffix to child task names.
+ * The uniqueness of task names is guaranteed before the process begins, so there is
+ * no need to forcibly rename tasks, which would add unnecessary complexity and
+ * performance overhead.
  * <p>
  * Input schema:
  * <pre>
@@ -71,16 +71,6 @@ public class ParallelTask implements FlowTask {
     static final String BRANCH_OUTPUTS_KEY = "branchOutputs";
 
     static final String FAILED_BRANCH_KEY = "failedBranch";
-
-    static final String INNER_LAST_TASK = "innerLastTask";
-
-    // Keys that are specific to TaskDef (beyond "name" and "type") used to
-    // distinguish real TaskDef Maps from arbitrary user payload Maps.
-    private static final Set<String> TASK_DEF_INDICATOR_KEYS =
-            new HashSet<>(Arrays.asList(
-                    "input", "controlDef", "progressDef", "logDef", "linkDef",
-                    "checkDef", "hangDef", "callback", "extension", "template"
-            ));
 
     @Setter
     private FlowExecutor<?> flowExecutor;
@@ -156,11 +146,9 @@ public class ParallelTask implements FlowTask {
         List<TaskInstance> result = new ArrayList<>(branches.size() + 1);
         result.add(parallelTask);
 
-        for (int i = 0; i < branches.size(); i++) {
-            Branch branch = branches.get(i);
+        for (Branch branch : branches) {
             if (CollectionUtils.isNotEmpty(branch.getTasks())) {
-                TaskDef branchEntryDef = createBranchTaskDef(
-                        branch.getTasks().get(0), i);
+                TaskDef branchEntryDef = branch.getTasks().get(0);
 
                 TaskInstance branchEntry = TaskInstance.create(branchEntryDef);
                 branchEntry.setFlowId(context.getFlowInstance().getFlowId());
@@ -206,8 +194,6 @@ public class ParallelTask implements FlowTask {
         FailurePolicy failurePolicy = getFailurePolicy(taskInstance.getTaskDef());
 
         // Check status of all immediate child (branch entry) tasks.
-        // A branch is "done" when its entry task has been executed (is terminal)
-        // AND has no further pending tasks in the branch chain.
         boolean allTerminal = true;
         boolean anyFailed = false;
         String failedBranchTask = null;
@@ -233,16 +219,14 @@ public class ParallelTask implements FlowTask {
 
         // Also check all descendant tasks in each branch:
         // A branch entry task may have completed, but its successor in the
-        // branch may still be running. We check that the last task in each
-        // branch chain has reached a terminal state.
+        // branch may still be running.
         if (allTerminal) {
-            allTerminal = allBranchChainsTerminal(
-                    currentFlow, taskInstance, subTaskIds);
+            allTerminal = allBranchChainsTerminal(currentFlow, taskInstance);
         }
 
         if (failurePolicy == FailurePolicy.FAIL_FAST && anyFailed) {
             // Fail fast: cancel remaining non-terminal branches
-            cancelRemainingBranches(currentFlow, subTaskIds);
+            cancelRemainingBranches(currentFlow, taskInstance);
 
             Map<String, Object> output = taskInstance.getOutput();
             if (output == null) {
@@ -275,7 +259,7 @@ public class ParallelTask implements FlowTask {
                     "Parallel branch(es) failed (WAIT_ALL): " + failedBranchTask);
         } else {
             // Aggregate branch outputs.
-            aggregateBranchOutputs(currentFlow, taskInstance, subTaskIds);
+            aggregateBranchOutputs(currentFlow, taskInstance);
             taskInstance.setStatus(TaskStatus.COMPLETED);
         }
 
@@ -332,8 +316,6 @@ public class ParallelTask implements FlowTask {
                     "PARALLEL task output must not be null when determining next task");
         }
 
-        Map<String, Object> output = mappingTask.getOutput();
-
         final List<Branch> branches = getBranches(toBeSearched);
 
         if (CollectionUtils.isEmpty(branches)) {
@@ -349,38 +331,27 @@ public class ParallelTask implements FlowTask {
             return TaskDef.MATCHED;
         }
 
-        // Find which branch the target belongs to.
-        int branchIndex = extractBranchIndex(target.getName());
-        if (branchIndex < 0) {
-            return null;
+        // Find which branch the target belongs to by iterating all branches.
+        // Since task names are guaranteed unique, only one branch will match.
+        for (Branch branch : branches) {
+            TaskDef nextTask = findNextTaskFromChildren(branch.getTasks(), target);
+            if (nextTask != null) {
+                return nextTask;
+            }
         }
 
-        if (branchIndex >= branches.size()) {
-            return null;
-        }
-
-        Branch branch = branches.get(branchIndex);
-        TaskDef nextTask = findNextTaskFromChildren(
-                branch.getTasks(), target, branchIndex);
-
-        if (nextTask != null && nextTask != TaskDef.MATCHED) {
-            output.put(INNER_LAST_TASK, nextTask.getName());
-        }
-
-        return nextTask;
+        return null;
     }
 
     /**
-     * Returns the first TaskDef for each branch, with branch-specific name suffixes.
+     * Returns the first TaskDef for each branch.
      */
     public List<TaskDef> getBranchEntryTasks(TaskDef taskDef) {
         List<Branch> branches = getBranches(taskDef);
         List<TaskDef> entryTasks = new ArrayList<>(branches.size());
-        for (int i = 0; i < branches.size(); i++) {
-            Branch branch = branches.get(i);
+        for (Branch branch : branches) {
             if (CollectionUtils.isNotEmpty(branch.getTasks())) {
-                entryTasks.add(createBranchTaskDef(
-                        branch.getTasks().get(0), i));
+                entryTasks.add(branch.getTasks().get(0));
             }
         }
         return entryTasks;
@@ -393,11 +364,11 @@ public class ParallelTask implements FlowTask {
         }
         taskInstance.setStatus(TaskStatus.CANCELED);
 
-        // Also cancel child branch tasks if flow context is available.
+        // Also cancel child branch tasks via FlowExecutor.
         FlowInstance currentFlow = FlowContext.getCurrentFlow();
         if (currentFlow != null
                 && CollectionUtils.isNotEmpty(taskInstance.getSubTaskIds())) {
-            cancelRemainingBranches(currentFlow, taskInstance.getSubTaskIds());
+            cancelRemainingBranches(currentFlow, taskInstance);
         }
     }
 
@@ -440,109 +411,71 @@ public class ParallelTask implements FlowTask {
 
     /**
      * Checks whether all branch chains (from entry to last task) have reached
-     * a terminal status. A "branch chain" is the sequence of tasks that follow
-     * from a branch entry task within the PARALLEL task's scope.
+     * a terminal status. We collect the set of task names belonging to all
+     * branches and check that every matching TaskInstance is terminal.
      */
     private boolean allBranchChainsTerminal(
             final FlowInstance currentFlow,
-            final TaskInstance parallelTask,
-            final List<String> subTaskIds) {
+            final TaskInstance parallelTask) {
 
-        for (String subTaskId : subTaskIds) {
-            Optional<TaskInstance> subTaskOpt = currentFlow.getTaskById(subTaskId);
-            if (!subTaskOpt.isPresent()) {
-                return false;
-            }
+        Set<String> branchTaskNames = collectBranchTaskNames(parallelTask.getTaskDef());
 
-            TaskInstance subTask = subTaskOpt.get();
-            if (!subTask.getStatus().isTerminal()) {
-                return false;
-            }
-
-            // Check if there are further tasks in this branch that
-            // haven't completed yet. We look for tasks whose name contains
-            // the same branch suffix.
-            int branchIndex = extractBranchIndex(subTask.getTaskName());
-            if (branchIndex >= 0) {
-                String branchSuffix = TaskConstants.PARALLEL_INDEX_SEPARATOR + branchIndex;
-                boolean hasPendingBranchTask = currentFlow.getTaskInstances().stream()
-                        .filter(t -> t.getTaskName().endsWith(branchSuffix))
-                        .anyMatch(t -> !t.getStatus().isTerminal());
-                if (hasPendingBranchTask) {
-                    return false;
-                }
-            }
-        }
-        return true;
+        return currentFlow.getTaskInstances().stream()
+                .filter(t -> branchTaskNames.contains(t.getTaskName()))
+                .allMatch(t -> t.getStatus().isTerminal());
     }
 
     /**
-     * Cancels all non-terminal branch tasks by delegating to each task's own
-     * FlowTask.cancel() method. This ensures that nested control-flow tasks
-     * (e.g., sub-flows, nested PARALLEL or LOOP tasks) are properly cleaned up
-     * rather than just having their status changed directly.
+     * Cancels all non-terminal branch tasks by delegating to
+     * {@link FlowExecutor#cancelTask(TaskInstance)}. This ensures that
+     * nested control-flow tasks (e.g., sub-flows, nested PARALLEL or LOOP
+     * tasks) are properly cleaned up rather than just having their status
+     * changed directly.
      */
     private void cancelRemainingBranches(
             final FlowInstance currentFlow,
-            final List<String> subTaskIds) {
+            final TaskInstance parallelTask) {
 
-        // Collect all branch suffixes from sub-task entries.
-        Set<String> branchSuffixes = new HashSet<>();
-        for (String subTaskId : subTaskIds) {
-            currentFlow.getTaskById(subTaskId).ifPresent(task -> {
-                int idx = extractBranchIndex(task.getTaskName());
-                if (idx >= 0) {
-                    branchSuffixes.add(
-                            TaskConstants.PARALLEL_INDEX_SEPARATOR + idx);
-                }
-            });
-        }
+        Set<String> branchTaskNames = collectBranchTaskNames(parallelTask.getTaskDef());
 
-        // Cancel all non-terminal tasks belonging to any of these branches
-        // by calling each task type's cancel() method (via FlowTask SPI).
         for (TaskInstance task : currentFlow.getTaskInstances()) {
-            if (!task.getStatus().isTerminal()) {
-                for (String suffix : branchSuffixes) {
-                    if (task.getTaskName().endsWith(suffix)) {
-                        cancelTask(task);
-                        break;
-                    }
+            if (!task.getStatus().isTerminal()
+                    && branchTaskNames.contains(task.getTaskName())) {
+                if (flowExecutor != null) {
+                    flowExecutor.cancelTask(task);
+                } else {
+                    task.setStatus(TaskStatus.CANCELED);
                 }
             }
         }
     }
 
     /**
-     * Cancels a single task by looking up its FlowTask implementation and
-     * calling cancel(). Falls back to direct status change if the FlowTask
-     * registry is not available (e.g., in unit tests without FlowExecutor).
+     * Collects all task names defined across all branches. Used by
+     * {@link #allBranchChainsTerminal} and {@link #cancelRemainingBranches}
+     * to identify which task instances belong to this PARALLEL task.
      */
-    private void cancelTask(TaskInstance task) {
-        if (flowExecutor != null && task.getTaskDef() != null) {
-            try {
-                FlowTask flowTask = flowExecutor.getFlowTaskRegistry()
-                        .getFlowTask(task.getTaskDef().getType());
-                flowTask.cancel(task);
-                return;
-            } catch (Exception e) {
-                // Fall back to direct status change
-                log.warn("Failed to cancel task {} via FlowTask SPI, falling back to direct status change: {}",
-                        task.getTaskName(), e.getMessage());
+    private Set<String> collectBranchTaskNames(TaskDef taskDef) {
+        List<Branch> branches = getBranches(taskDef);
+        Set<String> names = new HashSet<>();
+        for (Branch branch : branches) {
+            if (branch.getTasks() != null) {
+                for (TaskDef td : branch.getTasks()) {
+                    names.add(td.getName());
+                }
             }
         }
-        if (!task.getStatus().isTerminal()) {
-            task.setStatus(TaskStatus.CANCELED);
-        }
+        return names;
     }
 
     /**
      * Aggregates branch outputs into the PARALLEL task's output.
+     * For each branch, finds the last terminal task and records its output.
      */
     @SuppressWarnings("unchecked")
     private void aggregateBranchOutputs(
             final FlowInstance currentFlow,
-            final TaskInstance parallelTask,
-            final List<String> subTaskIds) {
+            final TaskInstance parallelTask) {
 
         Map<String, Object> output = parallelTask.getOutput();
         if (output == null) {
@@ -556,149 +489,41 @@ public class ParallelTask implements FlowTask {
 
         List<Branch> branches = getBranches(parallelTask.getTaskDef());
 
-        for (int i = 0; i < branches.size() && i < subTaskIds.size(); i++) {
-            Branch branch = branches.get(i);
-            String branchSuffix = TaskConstants.PARALLEL_INDEX_SEPARATOR + i;
+        for (Branch branch : branches) {
+            if (branch.getTasks() == null || branch.getTasks().isEmpty()) {
+                continue;
+            }
 
-            // Find the last terminal task in this branch.
-            TaskInstance lastTask = null;
-            for (TaskInstance task : currentFlow.getTaskInstances()) {
-                if (task.getTaskName().endsWith(branchSuffix)
-                        && task.getStatus().isTerminal()) {
-                    lastTask = task;
+            // The last task defined in the branch is the output source.
+            String lastTaskName = branch.getTasks()
+                    .get(branch.getTasks().size() - 1).getName();
+
+            currentFlow.getTaskByName(lastTaskName).ifPresent(lastTask -> {
+                if (lastTask.getStatus().isTerminal()) {
+                    branchOutputs.put(branch.getName(), lastTask.getOutput());
                 }
-            }
-
-            if (lastTask != null) {
-                branchOutputs.put(branch.getName(), lastTask.getOutput());
-            }
+            });
         }
     }
 
     /**
-     * Creates a deep copy of a TaskDef with a branch-specific name suffix.
-     * This ensures each branch's tasks have unique names, preventing
-     * the executor's name-based deduplication from filtering them out.
+     * Traverses the child tasks using {@code flowExecutor.getNextTask()},
+     * following the same pattern as IFTask/SwitchTask. This properly supports
+     * nested control-flow tasks (IF/SWITCH/LOOP/SUB_FLOW) within branches.
      */
-    private TaskDef createBranchTaskDef(TaskDef original, int branchIndex) {
-        String suffix = TaskConstants.PARALLEL_INDEX_SEPARATOR + branchIndex;
-
-        TaskDef copy = new TaskDef();
-        copy.setType(original.getType());
-        copy.setName(original.getName() + suffix);
-        copy.setDisplay(original.getDisplay());
-        copy.setDescription(original.getDescription());
-        copy.setControlDef(original.getControlDef());
-        copy.setProgressDef(original.getProgressDef());
-        copy.setLogDef(original.getLogDef());
-        copy.setLinkDef(original.getLinkDef());
-        copy.setCheckDef(original.getCheckDef());
-        copy.setHangDef(original.getHangDef());
-        copy.setCallback(original.getCallback());
-        copy.setExtension(original.getExtension());
-        copy.setTemplate(original.getTemplate());
-
-        Object copiedInput = deepCopyInputObject(original.getInput());
-        copy.setInput(copiedInput);
-        copy.setOutput(original.getOutput());
-
-        // Recursively rename any nested TaskDefs embedded in the input.
-        if (copiedInput != null) {
-            renameNestedTaskDefs(copiedInput, suffix);
-        }
-        return copy;
-    }
-
-    @SuppressWarnings("unchecked")
-    private Object deepCopyInputObject(Object input) {
-        if (input instanceof Map) {
-            Map<String, Object> original = (Map<String, Object>) input;
-            Map<String, Object> copied = new HashMap<>(original.size());
-            for (Map.Entry<String, Object> entry : original.entrySet()) {
-                copied.put(entry.getKey(), deepCopyInputObject(entry.getValue()));
-            }
-            return copied;
-        }
-        if (input instanceof List) {
-            List<?> original = (List<?>) input;
-            List<Object> copied = new ArrayList<>(original.size());
-            for (Object item : original) {
-                copied.add(deepCopyInputObject(item));
-            }
-            return copied;
-        }
-        return input;
-    }
-
-    @SuppressWarnings("unchecked")
-    private void renameNestedTaskDefs(Object obj, String suffix) {
-        if (obj instanceof Map) {
-            Map<String, Object> map = (Map<String, Object>) obj;
-            if (isTaskDefMap(map)) {
-                map.put("name", map.get("name") + suffix);
-            }
-            for (Object value : map.values()) {
-                renameNestedTaskDefs(value, suffix);
-            }
-        } else if (obj instanceof List) {
-            for (Object item : (List<?>) obj) {
-                renameNestedTaskDefs(item, suffix);
-            }
-        }
-    }
-
-    private static boolean isTaskDefMap(Map<String, Object> map) {
-        Object name = map.get("name");
-        if (!(name instanceof String)) {
-            return false;
-        }
-
-        Object type = map.get("type");
-        if (!(type instanceof String)) {
-            return false;
-        }
-
-        for (String key : TASK_DEF_INDICATOR_KEYS) {
-            if (map.containsKey(key)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Extracts the branch index from a suffixed task name.
-     * Returns -1 if the name has no branch suffix.
-     */
-    public static int extractBranchIndex(String taskName) {
-        int sepIndex = taskName.lastIndexOf(TaskConstants.PARALLEL_INDEX_SEPARATOR);
-        if (sepIndex >= 0) {
-            try {
-                return Integer.parseInt(
-                        taskName.substring(
-                                sepIndex
-                                        + TaskConstants.PARALLEL_INDEX_SEPARATOR.length()));
-            } catch (NumberFormatException e) {
-                return -1;
-            }
-        }
-        return -1;
-    }
-
     @SuppressWarnings("unchecked")
     private TaskDef findNextTaskFromChildren(
-            final List<TaskDef> branchTasks,
-            final TaskDef target,
-            final int branchIndex) {
+            final List<TaskDef> children,
+            final TaskDef target) {
 
-        for (int i = 0; i < branchTasks.size(); i++) {
-            TaskDef nextTask = flowExecutor.getNextTask(
-                    createBranchTaskDef(branchTasks.get(i), branchIndex),
-                    target
-            );
+        Iterator<TaskDef> iterator = children.iterator();
+
+        while (iterator.hasNext()) {
+            TaskDef nextTask =
+                    flowExecutor.getNextTask(iterator.next(), target);
             if (nextTask == TaskDef.MATCHED) {
-                return (i + 1) < branchTasks.size()
-                        ? createBranchTaskDef(branchTasks.get(i + 1), branchIndex)
+                return iterator.hasNext()
+                        ? iterator.next()
                         : TaskDef.MATCHED;
             } else if (nextTask != null) {
                 return nextTask;
