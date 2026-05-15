@@ -69,15 +69,21 @@ public class FlowInstance implements Serializable {
     private long endTime;
 
     public Optional<TaskInstance> getTaskByName(String taskName) {
-        return taskInstances.stream()
-                .filter(task -> task.getTaskName().equals(taskName))
-                .findFirst();
+        for (TaskInstance task : taskInstances) {
+            if (task.getTaskName().equals(taskName)) {
+                return Optional.of(task);
+            }
+        }
+        return Optional.empty();
     }
 
     public Optional<TaskInstance> getTaskById(String taskId) {
-        return taskInstances.stream()
-                .filter(task -> task.getTaskId().equals(taskId))
-                .findFirst();
+        for (TaskInstance task : taskInstances) {
+            if (task.getTaskId().equals(taskId)) {
+                return Optional.of(task);
+            }
+        }
+        return Optional.empty();
     }
 
     public String getExtension(String key) {
