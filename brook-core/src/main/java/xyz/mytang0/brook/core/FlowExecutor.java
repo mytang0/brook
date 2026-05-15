@@ -54,6 +54,7 @@ import xyz.mytang0.brook.spi.task.FlowTask;
 import javax.validation.ValidationException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -1437,7 +1438,7 @@ public class FlowExecutor<T extends FlowTask> {
             return Collections.emptyList();
         }
 
-        final Set<String> tasksInFlow = new HashSet<>();
+        final Set<String> tasksInFlow = new HashSet<>(flowInstance.getTaskInstances().size());
         for (TaskInstance taskInFlow : flowInstance.getTaskInstances()) {
             tasksInFlow.add(deduplicateKey(taskInFlow));
         }
@@ -2045,7 +2046,7 @@ public class FlowExecutor<T extends FlowTask> {
             return false;
         }
 
-        final Map<String, TaskStatus> taskStatusMap = new LinkedHashMap<>(
+        final Map<String, TaskStatus> taskStatusMap = new HashMap<>(
                 flowInstance.getTaskInstances().size());
         boolean noPendingTasks = true;
         for (TaskInstance taskInstance : flowInstance.getTaskInstances()) {
