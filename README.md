@@ -355,7 +355,7 @@ implementations for shared infrastructure.
 | Capability | Artifact | Relevant settings |
 | --- | --- | --- |
 | JavaScript computing | `brook-computing-javascript` | Select `engineType: "javascript"` in flow tasks. |
-| HTTP task | `brook-task-http` | `brook.task.http.client-config.connection-request-timeout`, `socket-timeout`, `connect-timeout`, `max-conn-total`, and `max-conn-per-route`. |
+| HTTP task | `brook-task-http` | `brook.task.http.clientConfig.connectionRequestTimeout`, `brook.task.http.clientConfig.socketTimeout`, `brook.task.http.clientConfig.connectTimeout`, `brook.task.http.clientConfig.maxConnTotal`, and `brook.task.http.clientConfig.maxConnPerRoute`. |
 | HTTP metadata | `brook-metadata-http` or Spring `brook-spring-boot-http-metadata` | Set `brook.metadata.protocol=http` and `brook.metadata.http.server-uri`; optional keys include `name-key`, `version-key`, `wrapped`, cache settings. |
 | MySQL metadata, queue, and execution DAO | `brook-spring-boot-mybatis` | Enable each adapter with `brook.metadata.mysql.enabled=true`, `brook.queue.mysql.enabled=true`, and/or `brook.execution-dao.mysql.enabled=true`; choose the corresponding protocol. |
 | Redis lock | `brook-lock-redis` or Spring `brook-spring-boot-lock-redis` | Set `brook.lock.protocol=redis` and configure `brook.lock.redis.config`. |
