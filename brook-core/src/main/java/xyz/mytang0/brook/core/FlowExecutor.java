@@ -54,6 +54,7 @@ import xyz.mytang0.brook.spi.task.FlowTask;
 import javax.validation.ValidationException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -1437,20 +1438,21 @@ public class FlowExecutor<T extends FlowTask> {
             return Collections.emptyList();
         }
 
-        List<String> tasksInFlow = flowInstance.getTaskInstances().stream()
-                .map(FlowExecutor::deduplicateKey)
-                .collect(Collectors.toList());
-
-        List<TaskInstance> deduplicatedTasks = taskInstances;
-
-        if (CollectionUtils.isNotEmpty(tasksInFlow)) {
-            deduplicatedTasks = taskInstances.stream()
-                    .filter(taskInstance ->
-                            !tasksInFlow.contains(
-                                    deduplicateKey(taskInstance)))
-                    .collect(Collectors.toList());
+        final Set<String> tasksInFlow = new HashSet<>(flowInstance.getTaskInstances().size());
+        for (TaskInstance taskInFlow : flowInstance.getTaskInstances()) {
+            tasksInFlow.add(deduplicateKey(taskInFlow));
         }
 
+        if (CollectionUtils.isEmpty(tasksInFlow)) {
+            return taskInstances;
+        }
+
+        final List<TaskInstance> deduplicatedTasks = new ArrayList<>(taskInstances.size());
+        for (TaskInstance taskInstance : taskInstances) {
+            if (!tasksInFlow.contains(deduplicateKey(taskInstance))) {
+                deduplicatedTasks.add(taskInstance);
+            }
+        }
         return deduplicatedTasks;
     }
 
@@ -2044,44 +2046,39 @@ public class FlowExecutor<T extends FlowTask> {
             return false;
         }
 
-        final Map<String, TaskStatus> taskStatusMap =
-                flowInstance.getTaskInstances()
-                        .stream()
-                        .collect(Collectors.toMap(
-                                TaskInstance::getTaskName,
-                                TaskInstance::getStatus));
-
-        List<TaskDef> taskDefs =
-                flowInstance.getFlowDef().getTaskDefs();
-
-        boolean allCompletedSuccessfully = taskDefs.stream()
-                .allMatch(taskDef -> {
-                    String taskName = taskDef.getName();
-                    if (flowInstance.getSkipTasks().contains(taskName)) {
-                        return true;
-                    }
-                    TaskStatus status = taskStatusMap.get(taskDef.getName());
-                    return status != null && status.isFinished();
-                });
-
-        if (!allCompletedSuccessfully) {
-            return false;
+        final Map<String, TaskStatus> taskStatusMap = new HashMap<>(
+                flowInstance.getTaskInstances().size());
+        boolean noPendingTasks = true;
+        for (TaskInstance taskInstance : flowInstance.getTaskInstances()) {
+            taskStatusMap.put(taskInstance.getTaskName(), taskInstance.getStatus());
+            if (!taskInstance.getStatus().isTerminal()) {
+                noPendingTasks = false;
+            }
         }
 
-        boolean noPendingTasks = taskStatusMap.values().stream()
-                .allMatch(TaskStatus::isTerminal);
+        List<TaskDef> taskDefs = flowInstance.getFlowDef().getTaskDefs();
+        for (TaskDef taskDef : taskDefs) {
+            String taskName = taskDef.getName();
+            if (flowInstance.getSkipTasks().contains(taskName)) {
+                continue;
+            }
+            TaskStatus status = taskStatusMap.get(taskName);
+            if (status == null || !status.isFinished()) {
+                return false;
+            }
+        }
 
         if (!noPendingTasks) {
             return false;
         }
 
-        return flowInstance.getTaskInstances().stream()
-                .noneMatch(taskInstance -> {
-                    TaskDef next = getNextTask(
-                            flowInstance, taskInstance.getTaskDef());
-                    return next != null
-                            && !taskStatusMap.containsKey(next.getName());
-                });
+        for (TaskInstance taskInstance : flowInstance.getTaskInstances()) {
+            TaskDef next = getNextTask(flowInstance, taskInstance.getTaskDef());
+            if (next != null && !taskStatusMap.containsKey(next.getName())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static FlowInstance newFlowInstance(final StartFlowReq startFlowReq) {
