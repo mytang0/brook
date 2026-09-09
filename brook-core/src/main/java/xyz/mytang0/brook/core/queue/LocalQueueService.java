@@ -73,7 +73,10 @@ public class LocalQueueService implements QueueService, Disposable {
         ArrayList<QueueMessage> polled = new ArrayList<>(count);
         BlockingQueue<QueueMessage> queue = getQueue(queueName);
         try {
-            polled.add(queue.poll(timeout, unit));
+            QueueMessage message = queue.poll(timeout, unit);
+            if (message != null) {
+                polled.add(message);
+            }
             count--;
             if (!queue.isEmpty() && 0 < count) {
                 queue.drainTo(polled, count);
@@ -87,6 +90,8 @@ public class LocalQueueService implements QueueService, Disposable {
     @Override
     public void remove(String queueName, String messageId) {
         delayedMessages.remove(messageId);
+        getQueue(queueName).removeIf(message ->
+                Objects.equals(message.getId(), messageId));
     }
 
     @Override

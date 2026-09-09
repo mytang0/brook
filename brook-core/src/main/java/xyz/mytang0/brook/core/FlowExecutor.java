@@ -23,6 +23,7 @@ import xyz.mytang0.brook.common.metadata.model.QueueMessage;
 import xyz.mytang0.brook.common.metadata.model.SkipTaskReq;
 import xyz.mytang0.brook.common.metadata.model.StartFlowReq;
 import xyz.mytang0.brook.common.metadata.model.TaskResult;
+import xyz.mytang0.brook.common.orchestration.StateTransitions;
 import xyz.mytang0.brook.common.utils.ExceptionUtils;
 import xyz.mytang0.brook.common.utils.JsonUtils;
 import xyz.mytang0.brook.common.utils.TimeUtils;
@@ -92,6 +93,8 @@ public class FlowExecutor<T extends FlowTask> {
 
     private static final Map<String, RequestCallback>
             requestCallbacks = new ConcurrentHashMap<>();
+
+    private static final int MAX_SCHEDULING_ITERATIONS = 10000;
 
     private final MetadataService metadataService;
 
@@ -379,49 +382,53 @@ public class FlowExecutor<T extends FlowTask> {
 
     private void executeUnsafe(final FlowInstance flowInstance) {
 
-        if (flowInstance.getStatus().isTerminal()) {
-            terminal(flowInstance);
-            return;
+        for (int iteration = 0; iteration < MAX_SCHEDULING_ITERATIONS; iteration++) {
+            if (flowInstance.getStatus().isTerminal()) {
+                terminal(flowInstance);
+                return;
+            }
+
+            DecideResult decideResult = decide(flowInstance);
+            if (decideResult.isComplete()) {
+                updateTasks(decideResult.getTasksToBeUpdated());
+                completeFlow(flowInstance);
+                continue;
+            }
+
+            List<TaskInstance> tasksToBeScheduled =
+                    decideResult.getTasksToBeScheduled();
+
+            List<TaskInstance> tasksToBeUpdated =
+                    decideResult.getTasksToBeUpdated();
+
+            List<TaskInstance> tasksToBeRetried =
+                    decideResult.getTasksToBeRetried();
+
+            if (CollectionUtils.isNotEmpty(tasksToBeScheduled)) {
+
+                scheduleTasks(flowInstance, tasksToBeScheduled)
+                        .forEach(taskInstance -> {
+                            if (executeUnsafe(taskInstance)) {
+                                tasksToBeUpdated.add(taskInstance);
+                            }
+                        });
+            }
+
+            if (CollectionUtils.isNotEmpty(tasksToBeUpdated)) {
+                updateTasks(tasksToBeUpdated);
+            }
+
+            if (CollectionUtils.isNotEmpty(tasksToBeRetried)) {
+                addToQueue(tasksToBeRetried);
+            }
+
+            if (CollectionUtils.isEmpty(tasksToBeUpdated)) {
+                return;
+            }
         }
 
-        DecideResult decideResult = decide(flowInstance);
-        if (decideResult.isComplete()) {
-            updateTasks(decideResult.getTasksToBeUpdated());
-            completeFlow(flowInstance);
-            executeUnsafe(flowInstance);
-            return;
-        }
-
-        List<TaskInstance> tasksToBeScheduled =
-                decideResult.getTasksToBeScheduled();
-
-        List<TaskInstance> tasksToBeUpdated =
-                decideResult.getTasksToBeUpdated();
-
-        List<TaskInstance> tasksToBeRetried =
-                decideResult.getTasksToBeRetried();
-
-        if (CollectionUtils.isNotEmpty(tasksToBeScheduled)) {
-
-            scheduleTasks(flowInstance, tasksToBeScheduled)
-                    .forEach(taskInstance -> {
-                        if (executeUnsafe(taskInstance)) {
-                            tasksToBeUpdated.add(taskInstance);
-                        }
-                    });
-        }
-
-        if (CollectionUtils.isNotEmpty(tasksToBeUpdated)) {
-            updateTasks(tasksToBeUpdated);
-        }
-
-        if (CollectionUtils.isNotEmpty(tasksToBeRetried)) {
-            addToQueue(tasksToBeRetried);
-        }
-
-        if (CollectionUtils.isNotEmpty(tasksToBeUpdated)) {
-            executeUnsafe(flowInstance);
-        }
+        throw new FlowException(FLOW_EXECUTION_ERROR,
+                "Exceeded maximum scheduling iterations for flow: " + flowInstance.getFlowId());
     }
 
     private void terminate(String flowId, TerminateException throwable) {
@@ -1468,7 +1475,11 @@ public class FlowExecutor<T extends FlowTask> {
                             taskInstance.getTaskId(),
                             taskInstance.getRetryCount()
                     ));
+                    message.setDeduplicationKey(message.getId());
+                    message.setAttempt(taskInstance.getRetryCount());
                     message.setDelayMs(taskInstance.getStartDelayMs());
+                    message.setAvailableAt(TimeUtils.currentTimeMillis()
+                            + taskInstance.getStartDelayMs());
                     return message;
                 }).collect(Collectors.toList())
         );
@@ -1939,6 +1950,11 @@ public class FlowExecutor<T extends FlowTask> {
         }
 
         taskInstance.setOutput(taskResult.getOutput());
+        if (!StateTransitions.isValid(status, taskResult.getStatus())) {
+            throw new FlowException(FLOW_EXECUTION_CONFLICT,
+                    String.format("Illegal task state transition: %s -> %s for task: %s",
+                            status, taskResult.getStatus(), taskResult.getTaskId()));
+        }
         taskInstance.setStatus(taskResult.getStatus());
         taskInstance.setProgress(taskResult.getProgress());
         taskInstance.setReasonForNotCompleting(taskResult.getReasonForNotCompleting());

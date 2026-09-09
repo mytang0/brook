@@ -13,9 +13,24 @@ public class QueueMessage implements Serializable {
 
     private String id;
 
+    /**
+     * Stable key used by transports to deduplicate a delivery.
+     */
+    private String deduplicationKey;
+
     private String payload;
 
     private int priority;
 
     private long delayMs;
+
+    /**
+     * Absolute availability timestamp, when known by the producer.
+     */
+    private long availableAt;
+
+    /**
+     * The task execution attempt represented by this message.
+     */
+    private int attempt;
 }
